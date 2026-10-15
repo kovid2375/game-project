@@ -66,3 +66,17 @@ model OtpChallenge {
   @@index([userId, purpose, createdAt])
   @@index([expiresAt])
 }
+
+model GameCase {
+  id              String   @id @default(uuid()) @db.Uuid
+  caseNumber      Int      @unique
+  title           String   @db.VarChar(120)
+  description     String   @db.VarChar(1000)
+  coverImageUrl   String   @db.VarChar(2048)
+  priceInPaise    Int      @default(0)
+  isPublished     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isPublished, caseNumber])
+}

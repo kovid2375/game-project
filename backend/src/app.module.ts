@@ -7,6 +7,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule ,ThrottlerGuard} from '@nestjs/throttler';
 import { AdminAuthModule } from './admin-auth/admin-auth.module.js';
 import { AdminUsersModule } from './admin-users/admin-users.module.js';
+import { AdminCasesModule } from './admin-cases/admin-cases.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -14,6 +15,7 @@ import { AdminUsersModule } from './admin-users/admin-users.module.js';
     AuthModule,
     AdminAuthModule,
     AdminUsersModule,
+    AdminCasesModule,
     ThrottlerModule.forRoot([{
       ttl:60_000,
       limit:10,
