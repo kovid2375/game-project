@@ -549,6 +549,68 @@ async verifyEmail(emailInput: string, code: string) {
 
   return { message: 'Email verified successfully' };
 }
+async adminLogin(loginDto: LoginDto) {
+  const email = loginDto.email.trim().toLowerCase();
+
+  const user = await this.prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      passwordHash: true,
+      role: true,
+      isActive: true,
+      emailVerifiedAt: true,
+    },
+  });
+
+  // Keep the response identical for invalid credentials and roles.
+  if (
+    !user ||
+    !user.isActive ||
+    user.role !== 'ADMIN' ||
+    !user.emailVerifiedAt
+  ) {
+    throw new UnauthorizedException('Invalid email or password');
+  }
+
+  let passwordMatches = false;
+
+  try {
+    passwordMatches = await argon2.verify(
+      user.passwordHash,
+      loginDto.password,
+    );
+  } catch {
+    throw new UnauthorizedException('Invalid email or password');
+  }
+
+  if (!passwordMatches) {
+    throw new UnauthorizedException('Invalid email or password');
+  }
+
+  const accessToken = await this.jwtService.signAsync({
+    sub: user.id,
+    role: user.role,
+  });
+
+  const refreshToken = await this.createSession(user.id);
+
+  return {
+    message: 'Admin login successful',
+    accessToken,
+    refreshToken,
+    tokenType: 'Bearer',
+    expiresIn: 600,
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
 
 
 

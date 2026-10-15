@@ -35,5 +35,6 @@ import { OtpService } from './otp/otp.service.js';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, EmailService, OtpService],
+  exports: [AuthService, PassportModule, JwtStrategy],
 })
 export class AuthModule {}
