@@ -8,6 +8,7 @@ import { ThrottlerModule ,ThrottlerGuard} from '@nestjs/throttler';
 import { AdminAuthModule } from './admin-auth/admin-auth.module.js';
 import { AdminUsersModule } from './admin-users/admin-users.module.js';
 import { AdminCasesModule } from './admin-cases/admin-cases.module.js';
+import { GameplayModule } from './gameplay/gameplay.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -16,6 +17,7 @@ import { AdminCasesModule } from './admin-cases/admin-cases.module.js';
     AdminAuthModule,
     AdminUsersModule,
     AdminCasesModule,
+    GameplayModule,
     ThrottlerModule.forRoot([{
       ttl:60_000,
       limit:10,

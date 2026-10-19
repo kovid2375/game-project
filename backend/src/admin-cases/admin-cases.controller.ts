@@ -37,6 +37,8 @@ import { CreateCaseDto } from './dto/create-case.dto.js';
 import { AdminCasesService } from './admin-cases.service.js';
 import { UpdateCaseDto } from './dto/update-case.dto.js';
 import { FindCasesQueryDto } from './dto/find-cases-query.dto.js';
+import { CreateSuspectDto } from './dto/create-suspect.dto.js';
+import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
 
 @ApiTags('Admin Cases')
 @ApiBearerAuth()
@@ -168,4 +170,57 @@ export class AdminCasesController {
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminCasesService.findOne(id);
   }
+
+  
+@Post(':caseId/suspects')
+@ApiOperation({ summary: 'Create a suspect for a case' })
+@ApiResponse({ status: 201, description: 'Suspect created successfully' })
+@ApiResponse({ status: 400, description: 'Invalid request data' })
+@ApiResponse({ status: 401, description: 'Unauthorized' })
+@ApiResponse({ status: 403, description: 'Admin access required' })
+@ApiResponse({ status: 404, description: 'Case not found' })
+async createSuspect(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Body() dto: CreateSuspectDto,
+) {
+  return this.adminCasesService.createSuspect(caseId, dto);
+}
+
+@Get(':caseId/suspects')
+@ApiOperation({ summary: 'Get all suspects for a case' })
+@ApiResponse({ status: 200, description: 'Suspects retrieved successfully' })
+async getSuspects(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getSuspects(caseId);
+}
+
+
+@Patch('suspects/:suspectId')
+@ApiOperation({ summary: 'Update suspect details' })
+@ApiResponse({ status: 200, description: 'Suspect updated successfully' })
+@ApiResponse({ status: 400, description: 'Invalid request' })
+@ApiResponse({ status: 404, description: 'Suspect not found' })
+async updateSuspect(
+  @Param('suspectId', ParseUUIDPipe) suspectId: string,
+  @Body() dto: UpdateSuspectDto,
+) {
+  return this.adminCasesService.updateSuspect(suspectId, dto);
+}
+
+
+@Delete('suspects/:suspectId')
+@ApiOperation({ summary: 'Delete a suspect if unused' })
+@ApiResponse({ status: 200, description: 'Suspect deleted successfully' })
+@ApiResponse({ status: 400, description: 'Suspect is already in use' })
+@ApiResponse({ status: 404, description: 'Suspect not found' })
+async deleteSuspect(
+  @Param('suspectId', ParseUUIDPipe) suspectId: string,
+) {
+  return this.adminCasesService.deleteSuspect(suspectId);
+}
+
+
+
+
 }

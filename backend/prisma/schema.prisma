@@ -12,42 +12,70 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole{
+enum UserRole {
   PLAYER
   ADMIN
 }
 
-enum OtpPurpose{
+enum OtpPurpose {
   LOGIN
   PASSWORD_RESET
   VERIFY_EMAIL
 }
 
-model User{
-  id String @id @default(uuid()) @db.Uuid
-  name String @db.VarChar(100)
-  email String @unique @db.VarChar(100)
-  passwordHash String
-  role UserRole @default(PLAYER)
-  emailVerifiedAt DateTime?
-  isActive Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sessions Session[]
-  otpChallenges OtpChallenge[]
-  @@index([createdAt])
-  
+enum PlayerCaseStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABANDONED
 }
-model Session{
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  refreshToken String @unique
-  expiresAt DateTime
-  revokedAt DateTime?  
-  createdAt DateTime @default(now())
-  lastUsedAt DateTime?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  @@index([userId,revokedAt])
+
+enum DiscoveryType {
+  CLUE
+  DOCUMENT
+  INTERVIEW_RESPONSE
+}
+
+enum SuspectAssessmentStatus {
+  SUSPICIOUS
+  CLEARED
+  UNSURE
+  RULED_OUT
+}
+
+enum AccusationStatus {
+  CORRECT
+  PARTIALLY_CORRECT
+  INCORRECT
+}
+
+model User {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String         @db.VarChar(100)
+  email           String         @unique @db.VarChar(100)
+  passwordHash    String
+  role            UserRole       @default(PLAYER)
+  emailVerifiedAt DateTime?
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  sessions        Session[]
+  otpChallenges   OtpChallenge[]
+  playerCases     PlayerCase[]
+
+  @@index([createdAt])
+}
+
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  refreshToken String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
   @@index([expiresAt])
 }
 
@@ -61,22 +89,389 @@ model OtpChallenge {
   consumedAt DateTime?
   createdAt  DateTime   @default(now())
 
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, purpose, createdAt])
   @@index([expiresAt])
 }
 
 model GameCase {
-  id              String   @id @default(uuid()) @db.Uuid
-  caseNumber      Int      @unique
-  title           String   @db.VarChar(120)
-  description     String   @db.VarChar(1000)
-  coverImageUrl   String   @db.VarChar(2048)
-  priceInPaise    Int      @default(0)
-  isPublished     Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String          @id @default(uuid()) @db.Uuid
+  caseNumber    Int             @unique
+  title         String          @db.VarChar(120)
+  description   String          @db.VarChar(1000)
+  coverImageUrl String          @db.VarChar(2048)
+  priceInPaise  Int             @default(0)
+  isPublished   Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  victim        CaseVictim?
+  policeReport  PoliceReport?
+  statements    CaseStatement[]
+  suspects      CaseSuspect[]
+  locations     CaseLocation[]
+  hints         CaseHint[]
+  solution      CaseSolution[]
+  playerCases   PlayerCase[]
 
   @@index([isPublished, caseNumber])
+}
+
+//Case Content
+
+model CaseVictim {
+  id           String   @id @default(uuid()) @db.Uuid
+  gameCaseId   String   @unique @db.Uuid
+  name         String   @db.VarChar(120)
+  age          Int
+  occupation   String   @db.VarChar(120)
+  dateOfDeath  DateTime
+  placeOfDeath String   @db.VarChar(250)
+  biography    String?  @db.VarChar(3000)
+
+  gameCase GameCase @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+}
+
+model PoliceReport {
+  id               String    @id @default(uuid()) @db.Uuid
+  gameCaseId       String    @unique @db.Uuid
+  timeOfDeathStart DateTime?
+  timeOfDeathEnd   DateTime?
+  causeOfDeath     String    @db.VarChar(1000)
+  officerNotes     String    @db.VarChar(5000)
+  isPublished      Boolean   @default(false)
+
+  gameCase GameCase @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+}
+
+model CaseStatement {
+  id          String  @id @default(uuid()) @db.Uuid
+  gameCaseId  String  @db.Uuid
+  speakerName String  @db.VarChar(120)
+  content     String  @db.VarChar(4000)
+  sortOrder   Int     @default(0)
+  isInitial   Boolean @default(true)
+
+  gameCase GameCase @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+
+  @@index([gameCaseId, sortOrder])
+}
+
+model CaseSuspect {
+  id                  String  @id @default(uuid()) @db.Uuid
+  gameCaseId          String  @db.Uuid
+  name                String  @db.VarChar(120)
+  photoUrl            String? @db.VarChar(2048)
+  relationship        String  @db.VarChar(250)
+  description         String  @db.VarChar(1000)
+  claimedAlibi        String  @db.VarChar(2000)
+  connections         String  @db.VarChar(3000)
+  sortOrder           Int     @default(0)
+  isInitiallyUnlocked Boolean @default(false)
+
+  gameCase        GameCase              @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+  threads         InterviewThread[]
+  assessments     SuspectAssessment[]
+  interviewVisits InterviewVisit[]
+  playerUnlocks   PlayerSuspectUnlock[]
+  selectedIn      CaseAttempt[]         @relation("SelectedSuspect")
+  solutionFor     CaseSolution?         @relation("CorrectSuspect")
+
+  @@index([gameCaseId, sortOrder])
+}
+
+model InterviewThread {
+  id                   String  @id @default(uuid()) @db.Uuid
+  suspectId            String  @db.Uuid
+  topic                String  @db.VarChar(160)
+  question             String  @db.VarChar(1000)
+  sortOrder            Int     @default(0)
+  visitNumber          Int     @default(1)
+  isInitiallyAvailable Boolean @default(false)
+
+  suspect   CaseSuspect         @relation(fields: [suspectId], references: [id], onDelete: Cascade)
+  responses InterviewResponse[]
+
+  @@index([suspectId, sortOrder])
+}
+
+model InterviewResponse {
+  id           String  @id @default(uuid()) @db.Uuid
+  threadId     String  @db.Uuid
+  responseText String  @db.VarChar(5000)
+  isNervous    Boolean @default(false)
+  sortOrder    Int     @default(0)
+
+  // These are internal authoring notes. Never expose them in player responses.
+  internalNotes String? @db.VarChar(2000)
+
+  thread      InterviewThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  discoveries PlayerDiscovery[]
+
+  @@index([threadId, sortOrder])
+}
+
+// -------------------- MAP AND EVIDENCE --------------------
+
+model CaseLocation {
+  id                    String  @id @default(uuid()) @db.Uuid
+  gameCaseId            String  @db.Uuid
+  name                  String  @db.VarChar(160)
+  description           String  @db.VarChar(3000)
+  imageUrl              String? @db.VarChar(2048)
+  mapX                  Float?
+  mapY                  Float?
+  isInitiallyOpen       Boolean @default(false)
+  isDeadEnd             Boolean @default(false)
+  searchActionPointCost Int     @default(1)
+  sortOrder             Int     @default(0)
+
+  gameCase  GameCase              @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+  clues     CaseClue[]
+  documents CaseDocument[]
+  leadsFrom CaseLead[]            @relation("LeadSource")
+  leadsTo   CaseLead[]            @relation("LeadDestination")
+  visits    PlayerLocationVisit[]
+
+  @@index([gameCaseId, sortOrder])
+}
+
+model CaseClue {
+  id          String   @id @default(uuid()) @db.Uuid
+  locationId  String   @db.Uuid
+  title       String   @db.VarChar(160)
+  description String   @db.VarChar(3000)
+  imageUrl    String?  @db.VarChar(2048)
+  tags        String[] @default([])
+  isRequired  Boolean  @default(false)
+  sortOrder   Int      @default(0)
+
+  location    CaseLocation      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  discoveries PlayerDiscovery[]
+  leadRules   CaseLead[]        @relation("LeadRequiredClue")
+  theoryLinks TheoryEvidence[]
+
+  @@index([locationId, sortOrder])
+}
+
+model CaseDocument {
+  id          String  @id @default(uuid()) @db.Uuid
+  locationId  String  @db.Uuid
+  title       String  @db.VarChar(160)
+  description String  @db.VarChar(2000)
+  content     String? @db.VarChar(10000)
+  fileUrl     String? @db.VarChar(2048)
+  sortOrder   Int     @default(0)
+
+  location    CaseLocation      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  discoveries PlayerDiscovery[]
+
+  @@index([locationId, sortOrder])
+}
+
+model CaseLead {
+  id                    String  @id @default(uuid()) @db.Uuid
+  sourceLocationId      String  @db.Uuid
+  destinationLocationId String  @db.Uuid
+  requiredClueId        String? @db.Uuid
+  title                 String  @db.VarChar(160)
+  description           String  @db.VarChar(1000)
+
+  sourceLocation      CaseLocation @relation("LeadSource", fields: [sourceLocationId], references: [id], onDelete: Cascade)
+  destinationLocation CaseLocation @relation("LeadDestination", fields: [destinationLocationId], references: [id], onDelete: Cascade)
+  requiredClue        CaseClue?    @relation("LeadRequiredClue", fields: [requiredClueId], references: [id], onDelete: SetNull)
+
+  @@index([sourceLocationId])
+  @@index([destinationLocationId])
+}
+
+model CaseHint {
+  id           String @id @default(uuid()) @db.Uuid
+  gameCaseId   String @db.Uuid
+  hintNumber   Int
+  content      String @db.VarChar(2000)
+  scorePenalty Int    @default(0)
+
+  gameCase GameCase @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([gameCaseId, hintNumber])
+}
+
+// -------------------- PLAYER PROGRESS --------------------
+
+model PlayerCase {
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @db.Uuid
+  gameCaseId       String           @db.Uuid
+  status           PlayerCaseStatus @default(IN_PROGRESS)
+  caseFileOpenedAt DateTime?
+  currentPhase     Int              @default(1)
+  actionPoints     Int              @default(10)
+  hintsUsed        Int              @default(0)
+  attemptsUsed     Int              @default(0)
+  score            Int              @default(0)
+  startedAt        DateTime         @default(now())
+  completedAt      DateTime?
+  lastActivityAt   DateTime         @default(now())
+
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameCase       GameCase              @relation(fields: [gameCaseId], references: [id], onDelete: Restrict)
+  discoveries    PlayerDiscovery[]
+  visits         PlayerLocationVisit[]
+  interviews     InterviewVisit[]
+  assessments    SuspectAssessment[]
+  theoryDraft    TheoryDraft?
+  attempts       CaseAttempt[]
+  notebook       NotebookEntry[]
+  suspectUnlocks PlayerSuspectUnlock[]
+  
+
+  @@unique([userId, gameCaseId])
+  @@index([userId, status])
+  @@index([gameCaseId, status])
+}
+
+model PlayerDiscovery {
+  id                  String        @id @default(uuid()) @db.Uuid
+  playerCaseId        String        @db.Uuid
+  type                DiscoveryType
+  clueId              String?       @db.Uuid
+  documentId          String?       @db.Uuid
+  interviewResponseId String?       @db.Uuid
+  discoveredAt        DateTime      @default(now())
+
+  playerCase        PlayerCase         @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  clue              CaseClue?          @relation(fields: [clueId], references: [id], onDelete: Cascade)
+  document          CaseDocument?      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  interviewResponse InterviewResponse? @relation(fields: [interviewResponseId], references: [id], onDelete: Cascade)
+
+  @@index([playerCaseId, discoveredAt])
+}
+
+model PlayerLocationVisit {
+  id           String    @id @default(uuid()) @db.Uuid
+  playerCaseId String    @db.Uuid
+  locationId   String    @db.Uuid
+  searchedAt   DateTime?
+  visitCount   Int       @default(1)
+
+  playerCase PlayerCase   @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  location   CaseLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([playerCaseId, locationId])
+  @@index([playerCaseId])
+}
+
+model InterviewVisit {
+  id            String      @id @default(uuid()) @db.Uuid
+  playerCaseId  String      @db.Uuid
+  suspectId     String      @db.Uuid
+  visitNumber   Int         @default(1)
+  questionsUsed Int         @default(0)
+  startedAt     DateTime    @default(now())
+  endedAt       DateTime?
+  suspect       CaseSuspect @relation(fields: [suspectId], references: [id], onDelete: Cascade)
+  playerCase    PlayerCase  @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+
+  @@index([playerCaseId, suspectId])
+}
+
+model SuspectAssessment {
+  id           String                  @id @default(uuid()) @db.Uuid
+  playerCaseId String                  @db.Uuid
+  suspectId    String                  @db.Uuid
+  status       SuspectAssessmentStatus @default(UNSURE)
+  updatedAt    DateTime                @updatedAt
+
+  playerCase PlayerCase  @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  suspect    CaseSuspect @relation(fields: [suspectId], references: [id], onDelete: Cascade)
+
+  @@unique([playerCaseId, suspectId])
+}
+
+model NotebookEntry {
+  id           String   @id @default(uuid()) @db.Uuid
+  playerCaseId String   @db.Uuid
+  title        String   @db.VarChar(160)
+  content      String   @db.VarChar(5000)
+  tags         String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  playerCase PlayerCase @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+
+  @@index([playerCaseId, updatedAt])
+}
+
+// -------------------- THEORY AND RESULTS --------------------
+
+model TheoryDraft {
+  id           String   @id @default(uuid()) @db.Uuid
+  playerCaseId String   @unique @db.Uuid
+  suspectId    String?  @db.Uuid
+  motive       String?  @db.VarChar(500)
+  method       String?  @db.VarChar(500)
+  explanation  String?  @db.VarChar(5000)
+  updatedAt    DateTime @updatedAt
+
+  playerCase PlayerCase       @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  evidence   TheoryEvidence[]
+}
+
+model TheoryEvidence {
+  id            String @id @default(uuid()) @db.Uuid
+  theoryDraftId String @db.Uuid
+  clueId        String @db.Uuid
+
+  theoryDraft TheoryDraft @relation(fields: [theoryDraftId], references: [id], onDelete: Cascade)
+  clue        CaseClue    @relation(fields: [clueId], references: [id], onDelete: Cascade)
+
+  @@unique([theoryDraftId, clueId])
+}
+
+model CaseAttempt {
+  id            String           @id @default(uuid()) @db.Uuid
+  playerCaseId  String           @db.Uuid
+  attemptNumber Int
+  suspectId     String?          @db.Uuid
+  motive        String           @db.VarChar(500)
+  method        String           @db.VarChar(500)
+  explanation   String           @db.VarChar(5000)
+  status        AccusationStatus
+  scoreAwarded  Int              @default(0)
+  submittedAt   DateTime         @default(now())
+
+  playerCase PlayerCase   @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  suspect    CaseSuspect? @relation("SelectedSuspect", fields: [suspectId], references: [id], onDelete: SetNull)
+
+  @@unique([playerCaseId, attemptNumber])
+  @@index([playerCaseId, submittedAt])
+}
+
+model CaseSolution {
+  id               String   @id @default(uuid()) @db.Uuid
+  gameCaseId       String   @unique @db.Uuid
+  correctSuspectId String   @unique @db.Uuid
+  motive           String   @db.VarChar(2000)
+  method           String   @db.VarChar(2000)
+  explanation      String   @db.VarChar(5000)
+  epilogue         String   @db.VarChar(5000)
+  updatedAt        DateTime @updatedAt
+
+  gameCase       GameCase    @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
+  correctSuspect CaseSuspect @relation("CorrectSuspect", fields: [correctSuspectId], references: [id], onDelete: Restrict)
+}
+
+model PlayerSuspectUnlock {
+  id           String   @id @default(uuid()) @db.Uuid
+  playerCaseId String   @db.Uuid
+  suspectId    String   @db.Uuid
+  unlockedAt   DateTime @default(now())
+  reason       String   @db.VarChar(255)
+
+  playerCase PlayerCase  @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  suspect    CaseSuspect @relation(fields: [suspectId], references: [id], onDelete: Cascade)
+
+  @@unique([playerCaseId, suspectId])
+  @@index([playerCaseId])
 }
