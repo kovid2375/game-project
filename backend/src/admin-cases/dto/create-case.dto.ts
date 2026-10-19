@@ -21,7 +21,7 @@ export class CreateCaseDto{
     @MaxLength(1000)
     description:string;
 
-    @ApiProperty({example:"https://ik.imagekit.io/..."})
+    @ApiProperty({example:"https://res.cloudinary.com/..."})
     @IsUrl({protocols:['https'],require_protocol:true})
     @MaxLength(2048)
     coverImageUrl:string;

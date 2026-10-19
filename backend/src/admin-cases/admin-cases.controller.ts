@@ -30,6 +30,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/guards/roles.guard.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import { ImageKitService } from './imagekit.service.js';
+import { CloudinaryService } from './cloudinary.service.js';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Body } from '@nestjs/common';
 import { CreateCaseDto } from './dto/create-case.dto.js';
@@ -44,7 +45,7 @@ import { FindCasesQueryDto } from './dto/find-cases-query.dto.js';
 @Roles('ADMIN')
 export class AdminCasesController {
   constructor(
-    private readonly imageKitService: ImageKitService,
+    private readonly cloudinaryService: CloudinaryService,
     private readonly adminCasesService: AdminCasesService,
   ) {}
 
@@ -95,7 +96,7 @@ export class AdminCasesController {
     )
     file: Express.Multer.File,
   ) {
-    return this.imageKitService.uploadCaseCover(file);
+    return this.cloudinaryService.uploadCaseCover(file);
   }
 
   @Post()

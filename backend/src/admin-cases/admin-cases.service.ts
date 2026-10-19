@@ -13,19 +13,22 @@ import { UpdateCaseDto } from './dto/update-case.dto.js';
 export class AdminCasesService{
     constructor (private readonly prisma:PrismaService,private readonly config:ConfigService){}
     async create(dto:CreateCaseDto){
-        const endpoint=this.config.get<string>(
-            'IMAGEKIT_URL_ENDPOINT'
-        )
-        if(!endpoint){
-            throw new Error('IMAGEKIT_URL_ENDPOINT is not configured')
+        let suppliedUrl: URL;
+        try {
+            suppliedUrl = new URL(dto.coverImageUrl);
+        } catch {
+            throw new BadRequestException('Invalid cover image URL');
         }
-        const expectedHost=new URL(endpoint).hostname
-        const suppliedUrl=new URL(dto.coverImageUrl)
 
-        if(suppliedUrl.protocol!=='https:'||suppliedUrl.hostname!==expectedHost){
+        const endpoint = this.config.get<string>('IMAGEKIT_URL_ENDPOINT');
+        const expectedHost = endpoint ? new URL(endpoint).hostname : null;
+        const isCloudinary = suppliedUrl.hostname.includes('cloudinary.com');
+        const isExpectedHost = expectedHost && suppliedUrl.hostname === expectedHost;
+
+        if (suppliedUrl.protocol !== 'https:' || (!isCloudinary && !isExpectedHost)) {
             throw new ConflictException(
-                'Cover image must be hosted on your configured ImageKit endpoint'
-            )
+                'Cover image must be hosted on Cloudinary or your configured media endpoint'
+            );
         }
         try{
             return await this.prisma.gameCase.create({
@@ -124,14 +127,8 @@ async update(id: string, dto: UpdateCaseDto) {
     throw new BadRequestException('Provide at least one field to update');
   }
 
-  // Validate replacement image URLs against your configured ImageKit host.
+  // Validate replacement image URLs against Cloudinary or configured host
   if (dto.coverImageUrl !== undefined) {
-    const endpoint = this.config.get<string>('IMAGEKIT_URL_ENDPOINT');
-
-    if (!endpoint) {
-      throw new Error('IMAGEKIT_URL_ENDPOINT is not configured');
-    }
-
     let suppliedUrl: URL;
 
     try {
@@ -140,12 +137,14 @@ async update(id: string, dto: UpdateCaseDto) {
       throw new BadRequestException('Invalid cover image URL');
     }
 
-    if (
-      suppliedUrl.protocol !== 'https:' ||
-      suppliedUrl.hostname !== new URL(endpoint).hostname
-    ) {
+    const endpoint = this.config.get<string>('IMAGEKIT_URL_ENDPOINT');
+    const expectedHost = endpoint ? new URL(endpoint).hostname : null;
+    const isCloudinary = suppliedUrl.hostname.includes('cloudinary.com');
+    const isExpectedHost = expectedHost && suppliedUrl.hostname === expectedHost;
+
+    if (suppliedUrl.protocol !== 'https:' || (!isCloudinary && !isExpectedHost)) {
       throw new BadRequestException(
-        'Cover image must use your configured ImageKit endpoint',
+        'Cover image must use Cloudinary or your configured media endpoint',
       );
     }
 

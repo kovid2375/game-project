@@ -33,7 +33,7 @@ export class UpdateCaseDto {
   @MaxLength(1000)
   description?: string;
 
-  @ApiPropertyOptional({ example: "https://ik.imagekit.io/..." })
+  @ApiPropertyOptional({ example: "https://res.cloudinary.com/..." })
   @IsOptional()
   @IsUrl({ protocols: ['https'], require_protocol: true })
   @MaxLength(2048)

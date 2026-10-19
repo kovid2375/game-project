@@ -40,18 +40,25 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
     authHeaders['Authorization'] = `Bearer ${token}`;
   }
 
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+
+  const defaultHeaders: Record<string, string> = {
+    ...authHeaders,
+    ...headers as Record<string, string>,
+  };
+
+  if (!isFormData) {
+    defaultHeaders['Content-Type'] = 'application/json';
+  }
+
   const config: RequestInit = {
     method: data ? 'POST' : 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...headers,
-    },
+    headers: defaultHeaders,
     ...customConfig,
   };
 
   if (data !== undefined) {
-    config.body = JSON.stringify(data);
+    config.body = isFormData ? (data as FormData) : JSON.stringify(data);
   }
 
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;

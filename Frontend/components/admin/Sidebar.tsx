@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   LayoutDashboard,
   Users,
+  Briefcase,
   Settings,
   Search,
   ShieldAlert,
@@ -13,6 +14,7 @@ import {
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Cases", href: "/admin/cases", icon: Briefcase },
 ];
 
 export default function Sidebar() {
