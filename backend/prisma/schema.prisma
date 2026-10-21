@@ -174,6 +174,7 @@ model CaseSuspect {
   assessments     SuspectAssessment[]
   interviewVisits InterviewVisit[]
   playerUnlocks   PlayerSuspectUnlock[]
+  responseUnlocks InterviewResponseUnlock[] @relation("ResponseUnlockSuspect")
   selectedIn      CaseAttempt[]         @relation("SelectedSuspect")
   solutionFor     CaseSolution?         @relation("CorrectSuspect")
 
@@ -188,6 +189,7 @@ model InterviewThread {
   sortOrder            Int     @default(0)
   visitNumber          Int     @default(1)
   isInitiallyAvailable Boolean @default(false)
+  answers InterviewAnswer[]
 
   suspect   CaseSuspect         @relation(fields: [suspectId], references: [id], onDelete: Cascade)
   responses InterviewResponse[]
@@ -207,6 +209,8 @@ model InterviewResponse {
 
   thread      InterviewThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
   discoveries PlayerDiscovery[]
+  unlocks InterviewResponseUnlock[]
+  answers InterviewAnswer[]
 
   @@index([threadId, sortOrder])
 }
@@ -232,6 +236,8 @@ model CaseLocation {
   leadsFrom CaseLead[]            @relation("LeadSource")
   leadsTo   CaseLead[]            @relation("LeadDestination")
   visits    PlayerLocationVisit[]
+  unlocks InterviewResponseUnlock[]
+  playerUnlocks PlayerLocationUnlock[]
 
   @@index([gameCaseId, sortOrder])
 }
@@ -250,6 +256,7 @@ model CaseClue {
   discoveries PlayerDiscovery[]
   leadRules   CaseLead[]        @relation("LeadRequiredClue")
   theoryLinks TheoryEvidence[]
+  unlocks InterviewResponseUnlock[]
 
   @@index([locationId, sortOrder])
 }
@@ -265,6 +272,7 @@ model CaseDocument {
 
   location    CaseLocation      @relation(fields: [locationId], references: [id], onDelete: Cascade)
   discoveries PlayerDiscovery[]
+  unlocks InterviewResponseUnlock[]
 
   @@index([locationId, sortOrder])
 }
@@ -324,6 +332,7 @@ model PlayerCase {
   attempts       CaseAttempt[]
   notebook       NotebookEntry[]
   suspectUnlocks PlayerSuspectUnlock[]
+  locationUnlocks PlayerLocationUnlock[]
   
 
   @@unique([userId, gameCaseId])
@@ -370,6 +379,7 @@ model InterviewVisit {
   questionsUsed Int         @default(0)
   startedAt     DateTime    @default(now())
   endedAt       DateTime?
+  answers InterviewAnswer[]
   suspect       CaseSuspect @relation(fields: [suspectId], references: [id], onDelete: Cascade)
   playerCase    PlayerCase  @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
 
@@ -475,3 +485,57 @@ model PlayerSuspectUnlock {
   @@unique([playerCaseId, suspectId])
   @@index([playerCaseId])
 }
+
+
+model InterviewResponseUnlock {
+  id         String   @id @default(uuid()) @db.Uuid
+  responseId String   @db.Uuid
+  clueId     String?  @db.Uuid
+  documentId String?  @db.Uuid
+  locationId String?  @db.Uuid
+  suspectId  String?  @db.Uuid
+  createdAt  DateTime @default(now())
+
+  response InterviewResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  clue     CaseClue?          @relation(fields: [clueId], references: [id], onDelete: Cascade)
+  document CaseDocument?      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  location CaseLocation?      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  suspect  CaseSuspect?       @relation("ResponseUnlockSuspect", fields: [suspectId], references: [id], onDelete: Cascade)
+
+  @@index([responseId])
+}
+
+
+model InterviewAnswer {
+  id               String   @id @default(uuid()) @db.Uuid
+  interviewVisitId String   @db.Uuid
+  threadId         String   @db.Uuid
+  responseId       String   @db.Uuid
+  answeredAt       DateTime @default(now())
+
+  interviewVisit InterviewVisit @relation(fields: [interviewVisitId], references: [id], onDelete: Cascade)
+  thread         InterviewThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  response       InterviewResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewVisitId, threadId])
+  @@index([interviewVisitId, answeredAt])
+}
+
+
+model PlayerLocationUnlock {
+  id           String   @id @default(uuid()) @db.Uuid
+  playerCaseId String   @db.Uuid
+  locationId   String   @db.Uuid
+  reason       String   @default("Discovered during investigation") @db.VarChar(300)
+  unlockedAt   DateTime @default(now())
+
+  playerCase PlayerCase  @relation(fields: [playerCaseId], references: [id], onDelete: Cascade)
+  location   CaseLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([playerCaseId, locationId])
+  @@index([playerCaseId, unlockedAt])
+}
+
+
+
+

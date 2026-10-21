@@ -12,7 +12,9 @@ import { throwError } from 'rxjs';
 import { UpdateCaseDto } from './dto/update-case.dto.js';
 import { CreateSuspectDto } from './dto/create-suspect.dto.js';
 import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
-
+import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
+import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
+import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
 @Injectable()
 export class AdminCasesService {
   constructor(
@@ -473,5 +475,278 @@ async deleteSuspect(suspectId: string) {
     name: suspect.name,
   };
 }
+  async createInterviewThread(suspectId:string,dto:CreateInterviewThreadDto){
+    const suspect=await this.prisma.caseSuspect.findUnique({
+      where:{id:suspectId},
+      select:{
+        id:true,
+        name:true,
+        gameCaseId:true
+      }
+    })
+    if(!suspect){
+      throw new NotFoundException('Suspect not found')
+    }
+    const thread =await this.prisma.interviewThread.create({
+      data: {
+      suspectId,
+      topic: dto.topic.trim(),
+      question: dto.question.trim(),
+      visitNumber: dto.visitNumber,
+      isInitiallyAvailable: dto.isInitiallyAvailable,
+      sortOrder: dto.sortOrder,
+    },
+    select: {
+      id: true,
+      suspectId: true,
+      topic: true,
+      question: true,
+      visitNumber: true,
+      isInitiallyAvailable: true,
+      sortOrder: true,
+    },
+  });
+    return {
+    message: 'Interview thread created successfully',
+    suspect:{
+      id:suspect.id,
+      name:suspect.name,
+      gameCaseId:suspect.gameCaseId
+    },
+    thread
+  };
+
+    
+  }
+
+  async createInterviewResponse(threadId:string,dto:CreateInterviewResponseDto){
+    const thread=await this.prisma.interviewThread.findUnique({
+      where:{id:threadId},
+      select:{
+        id:true,
+        topic:true,
+        suspect:{
+          select:{
+            id:true,
+            name:true,
+            gameCaseId:true
+          }
+        }
+      }
+    })
+    if (!thread){
+      throw new NotFoundException('Interview thread not found')
+    }
+    const response =await this.prisma.interviewResponse.create({
+      data:{
+        threadId,
+        responseText:dto.responseText,
+        isNervous:dto.isNervous,
+        sortOrder:dto.sortOrder,
+        internalNotes:dto.internalNotes
+      },
+      select:{
+        id:true,
+        threadId:true,
+        responseText:true,
+        isNervous:true,
+        sortOrder:true,
+      }
+    })
+    return {
+      message: 'Interview response created successfully',
+      suspect:thread.suspect,
+      topic:thread.topic,
+      response
+    };
+  }
+
+async getInterviewThreads(suspectId: string) {
+  const suspect = await this.prisma.caseSuspect.findUnique({
+    where: { id: suspectId },
+    select: {
+      id: true,
+      name: true,
+      gameCaseId: true,
+    },
+  });
+
+  if (!suspect) {
+    throw new NotFoundException('Suspect not found');
+  }
+
+  const threads = await this.prisma.interviewThread.findMany({
+    where: { suspectId },
+    orderBy: [
+      { visitNumber: 'asc' },
+      { sortOrder: 'asc' },
+    ],
+    select: {
+      id: true,
+      topic: true,
+      question: true,
+      visitNumber: true,
+      isInitiallyAvailable: true,
+      sortOrder: true,
+      responses: {
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          responseText: true,
+          isNervous: true,
+          sortOrder: true,
+        },
+      },
+    },
+  });
+
+  return {
+    suspect,
+    totalThreads: threads.length,
+    threads,
+  };
+}
+
+async createInterviewResponseUnlock(
+  responseId: string,
+  dto: CreateInterviewResponseUnlockDto,
+) {
+  const response = await this.prisma.interviewResponse.findUnique({
+    where: { id: responseId },
+    select: {
+      id: true,
+      thread: {
+        select: {
+          topic: true,
+          suspect: {
+            select: {
+              id: true,
+              name: true,
+              gameCaseId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!response) {
+    throw new NotFoundException('Interview response not found');
+  }
+
+  const targetId = dto.targetId;
+  let targetName: string;
+
+  switch (dto.type) {
+    case 'CLUE': {
+      const target = await this.prisma.caseClue.findUnique({
+        where: { id: targetId },
+        select: { id: true, title: true, location: { select: { gameCaseId: true } } },
+      });
+
+      if (!target || target.location.gameCaseId !== response.thread.suspect.gameCaseId) {
+        throw new BadRequestException('Clue not found in this case');
+      }
+
+      targetName = target.title;
+      break;
+    }
+
+    case 'DOCUMENT': {
+      const target = await this.prisma.caseDocument.findUnique({
+        where: { id: targetId },
+        select: { id: true, title: true, location: { select: { gameCaseId: true } } },
+      });
+
+      if (!target || target.location.gameCaseId !== response.thread.suspect.gameCaseId) {
+        throw new BadRequestException('Document not found in this case');
+      }
+
+      targetName = target.title;
+      break;
+    }
+
+    case 'LOCATION': {
+      const target = await this.prisma.caseLocation.findUnique({
+        where: { id: targetId },
+        select: { id: true, name: true, gameCaseId: true },
+      });
+
+      if (!target || target.gameCaseId !== response.thread.suspect.gameCaseId) {
+        throw new BadRequestException('Location not found in this case');
+      }
+
+      targetName = target.name;
+      break;
+    }
+
+    case 'SUSPECT': {
+      const target = await this.prisma.caseSuspect.findUnique({
+        where: { id: targetId },
+        select: { id: true, name: true, gameCaseId: true },
+      });
+
+      if (!target || target.gameCaseId !== response.thread.suspect.gameCaseId) {
+        throw new BadRequestException('Suspect not found in this case');
+      }
+
+      if (target.id === response.thread.suspect.id) {
+        throw new BadRequestException('A suspect cannot unlock themselves');
+      }
+
+      targetName = target.name;
+      break;
+    }
+  }
+
+  const existing = await this.prisma.interviewResponseUnlock.findFirst({
+    where: {
+      responseId,
+      clueId: dto.type === 'CLUE' ? targetId : null,
+      documentId: dto.type === 'DOCUMENT' ? targetId : null,
+      locationId: dto.type === 'LOCATION' ? targetId : null,
+      suspectId: dto.type === 'SUSPECT' ? targetId : null,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    throw new BadRequestException('This response already unlocks that item');
+  }
+
+  const unlock = await this.prisma.interviewResponseUnlock.create({
+    data: {
+      responseId,
+      clueId: dto.type === 'CLUE' ? targetId : null,
+      documentId: dto.type === 'DOCUMENT' ? targetId : null,
+      locationId: dto.type === 'LOCATION' ? targetId : null,
+      suspectId: dto.type === 'SUSPECT' ? targetId : null,
+    },
+    select: {
+      id: true,
+      responseId: true,
+      clueId: true,
+      documentId: true,
+      locationId: true,
+      suspectId: true,
+      createdAt: true,
+    },
+  });
+
+  return {
+    message: 'Interview discovery configured successfully',
+    responseId,
+    topic: response.thread.topic,
+    targetName,
+    unlock,
+  };
+}
+
+
+
+
+
+
+
 
 }

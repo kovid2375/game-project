@@ -39,6 +39,9 @@ import { UpdateCaseDto } from './dto/update-case.dto.js';
 import { FindCasesQueryDto } from './dto/find-cases-query.dto.js';
 import { CreateSuspectDto } from './dto/create-suspect.dto.js';
 import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
+import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
+import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
+import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
 
 @ApiTags('Admin Cases')
 @ApiBearerAuth()
@@ -219,6 +222,67 @@ async deleteSuspect(
 ) {
   return this.adminCasesService.deleteSuspect(suspectId);
 }
+
+@Post('suspects/:suspectId/interview-threads')
+@ApiOperation({summary:'Create an interview question for a suspect'})
+@ApiResponse({
+  status:201,
+  description:'Interview question created successfully',
+})
+@ApiResponse({status:400,description:'Invalid request data'})
+@ApiResponse({status:401,description:'Unauthorized'})
+@ApiResponse({status:403,description:'Admin access required'})
+@ApiResponse({status:404,description:'Suspect not found'})
+async createInterviewThread(
+  @Param('suspectId',ParseUUIDPipe) suspectId:string,
+  @Body() dto:CreateInterviewThreadDto,
+){
+  return this.adminCasesService.createInterviewThread(suspectId,dto)
+}
+
+
+@Post('interview-threads/:threadId/responses')
+@ApiOperation({ summary: 'Create a suspect response for an interview question' })
+@ApiResponse({ status: 201, description: 'Interview response created successfully' })
+@ApiResponse({ status: 404, description: 'Interview thread not found' })
+async createInterviewResponse(
+  @Param('threadId', ParseUUIDPipe) threadId: string,
+  @Body() dto: CreateInterviewResponseDto,
+) {
+  return this.adminCasesService.createInterviewResponse(threadId, dto);
+}
+
+
+
+@Get('suspects/:suspectId/interview-threads')
+@ApiOperation({ summary: 'List interview threads and responses for a suspect' })
+@ApiResponse({ status: 200, description: 'Interview threads retrieved successfully' })
+@ApiResponse({ status: 404, description: 'Suspect not found' })
+async getInterviewThreads(
+  @Param('suspectId', ParseUUIDPipe) suspectId: string,
+) {
+  return this.adminCasesService.getInterviewThreads(suspectId);
+}
+
+@Post('interview-responses/:responseId/unlocks')
+@ApiOperation({
+  summary: 'Configure a clue, document, location, or suspect unlocked by a response',
+})
+@ApiResponse({ status: 201, description: 'Discovery configured successfully' })
+@ApiResponse({ status: 400, description: 'Invalid target or duplicate unlock' })
+@ApiResponse({ status: 404, description: 'Interview response not found' })
+async createInterviewResponseUnlock(
+  @Param('responseId', ParseUUIDPipe) responseId: string,
+  @Body() dto: CreateInterviewResponseUnlockDto,
+) {
+  return this.adminCasesService.createInterviewResponseUnlock(
+    responseId,
+    dto,
+  );
+}
+
+
+
 
 
 
