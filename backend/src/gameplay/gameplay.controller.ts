@@ -136,6 +136,32 @@ getLocationDetails(
 }
 
 
+@Post(':playerCaseId/locations/:locationId/investigate')
+@ApiOperation({ summary: 'Search a location for clues and documents' })
+@ApiResponse({ status: 200, description: 'Location investigated successfully' })
+@ApiResponse({ status: 400, description: 'Insufficient action points' })
+@ApiResponse({ status: 403, description: 'Location is locked or investigation unavailable' })
+@ApiResponse({ status: 404, description: 'Investigation or location not found' })
+investigateLocation(
+  @Param('playerCaseId', new ParseUUIDPipe()) playerCaseId: string,
+  @Param('locationId', new ParseUUIDPipe()) locationId: string,
+  @Req() req: { user: { id?: string; userId?: string; sub?: string } },
+) {
+  const userId = req.user.id ?? req.user.userId ?? req.user.sub;
+
+  if (!userId) {
+    throw new UnauthorizedException('Authenticated user ID is missing');
+  }
+
+  return this.gameplauService.investigateLocation(
+    userId,
+    playerCaseId,
+    locationId,
+  );
+}
+
+
+
 
   @Get(':playerCaseId/suspects/:suspectId')
   @ApiOperation({ summary: 'get suspect' })

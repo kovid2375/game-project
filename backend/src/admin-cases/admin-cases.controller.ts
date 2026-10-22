@@ -42,6 +42,7 @@ import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
 import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
 import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
 import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
+import { CreateCaseLeadDto } from './dto/create-case-lead.dto.js';
 
 @ApiTags('Admin Cases')
 @ApiBearerAuth()
@@ -280,6 +281,40 @@ async createInterviewResponseUnlock(
     dto,
   );
 }
+
+
+
+@Post(':caseId/leads')
+@ApiOperation({ summary: 'Create a lead connecting two case locations' })
+@ApiResponse({ status: 201, description: 'Lead created successfully' })
+async createLead(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Body() dto: CreateCaseLeadDto,
+) {
+  return this.adminCasesService.createLead(caseId, dto);
+}
+
+
+@Get(':caseId/leads')
+@ApiOperation({ summary: 'Get all leads for a case' })
+@ApiResponse({ status: 200, description: 'Case leads retrieved successfully' })
+getLeads(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getLeads(caseId);
+}
+
+
+@Delete(':caseId/leads/:leadId')
+@ApiOperation({ summary: 'Delete a lead from a case' })
+@ApiResponse({ status: 200, description: 'Lead deleted successfully' })
+deleteLead(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('leadId', ParseUUIDPipe) leadId: string,
+) {
+  return this.adminCasesService.deleteLead(caseId, leadId);
+}
+
 
 
 

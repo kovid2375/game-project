@@ -15,6 +15,7 @@ import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
 import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
 import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
 import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
+import { CreateCaseLeadDto } from './dto/create-case-lead.dto.js';
 @Injectable()
 export class AdminCasesService {
   constructor(
@@ -740,7 +741,142 @@ async createInterviewResponseUnlock(
     targetName,
     unlock,
   };
+  
+
+  
+
 }
+
+async createLead(caseId: string, dto: CreateCaseLeadDto) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  if (dto.sourceLocationId === dto.destinationLocationId) {
+    throw new BadRequestException(
+      'Source and destination locations must be different',
+    );
+  }
+
+  const [sourceLocation, destinationLocation] = await Promise.all([
+    this.prisma.caseLocation.findFirst({
+      where: {
+        id: dto.sourceLocationId,
+        gameCaseId: caseId,
+      },
+      select: { id: true },
+    }),
+    this.prisma.caseLocation.findFirst({
+      where: {
+        id: dto.destinationLocationId,
+        gameCaseId: caseId,
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!sourceLocation || !destinationLocation) {
+    throw new BadRequestException(
+      'Both locations must belong to this case',
+    );
+  }
+
+  if (dto.requiredClueId) {
+    const clue = await this.prisma.caseClue.findFirst({
+      where: {
+        id: dto.requiredClueId,
+        location: { gameCaseId: caseId },
+      },
+      select: { id: true },
+    });
+
+    if (!clue) {
+      throw new BadRequestException(
+        'Required clue must belong to this case',
+      );
+    }
+  }
+
+  return this.prisma.caseLead.create({
+    data: {
+      sourceLocationId: dto.sourceLocationId,
+      destinationLocationId: dto.destinationLocationId,
+      requiredClueId: dto.requiredClueId,
+      title: dto.title,
+      description: dto.description,
+    },
+  });
+}
+
+async getLeads(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseLead.findMany({
+    where: {
+      sourceLocation: {
+        gameCaseId: caseId,
+      },
+    },
+    include: {
+      sourceLocation: {
+        select: { id: true, name: true },
+      },
+      destinationLocation: {
+        select: { id: true, name: true },
+      },
+      requiredClue: {
+        select: { id: true, title: true },
+      },
+    },
+    orderBy: {
+      title: 'asc',
+    },
+  });
+}
+
+
+async deleteLead(caseId: string, leadId: string) {
+  const lead = await this.prisma.caseLead.findFirst({
+    where: {
+      id: leadId,
+      sourceLocation: {
+        gameCaseId: caseId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!lead) {
+    throw new NotFoundException('Lead not found for this case');
+  }
+
+  await this.prisma.caseLead.delete({
+    where: {
+      id: lead.id,
+    },
+  });
+
+  return {
+    message: 'Lead deleted successfully',
+    leadId: lead.id,
+  };
+}
+
+
 
 
 

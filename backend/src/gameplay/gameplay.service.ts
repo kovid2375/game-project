@@ -256,6 +256,7 @@ const suspects = await this.prisma.caseSuspect.findMany({
   }
 
   
+
 async getLocations(userId: string, playerCaseId: string) {
   const progress = await this.prisma.playerCase.findFirst({
     where: {
@@ -298,13 +299,18 @@ async getLocations(userId: string, playerCaseId: string) {
       isDeadEnd: true,
       sortOrder: true,
       playerUnlocks: {
-        where: {
-          playerCaseId,
-        },
+        where: { playerCaseId },
         select: {
           id: true,
           reason: true,
           unlockedAt: true,
+        },
+      },
+      visits: {
+        where: { playerCaseId },
+        select: {
+          searchedAt: true,
+          visitCount: true,
         },
       },
     },
@@ -317,6 +323,9 @@ async getLocations(userId: string, playerCaseId: string) {
     const isUnlocked =
       location.isInitiallyOpen || location.playerUnlocks.length > 0;
 
+    const visit = location.visits[0];
+    const isInvestigated = Boolean(visit?.searchedAt);
+
     return {
       id: location.id,
       name: isUnlocked ? location.name : null,
@@ -325,6 +334,7 @@ async getLocations(userId: string, playerCaseId: string) {
       mapX: location.mapX,
       mapY: location.mapY,
       isUnlocked,
+      isInvestigated: isUnlocked && isInvestigated,
       isDeadEnd: isUnlocked ? location.isDeadEnd : null,
       sortOrder: location.sortOrder,
       unlockReason: location.playerUnlocks[0]?.reason ?? null,
@@ -332,6 +342,7 @@ async getLocations(userId: string, playerCaseId: string) {
     };
   });
 }
+
 
 async getLocationDetails(
   userId: string,
@@ -414,6 +425,339 @@ async getLocationDetails(
     unlockedAt: location.playerUnlocks[0]?.unlockedAt ?? null,
   };
 }
+
+
+async investigateLocation(
+  userId: string,
+  playerCaseId: string,
+  locationId: string,
+) {
+  return this.prisma.$transaction(async (tx) => {
+    const progress = await tx.playerCase.findFirst({
+      where: {
+        id: playerCaseId,
+        userId,
+      },
+      select: {
+        id: true,
+        gameCaseId: true,
+        status: true,
+        currentPhase: true,
+        actionPoints: true,
+      },
+    });
+
+    if (!progress) {
+      throw new NotFoundException('Investigation not found');
+    }
+
+    if (
+      progress.status !== PlayerCaseStatus.IN_PROGRESS ||
+      progress.currentPhase < 2
+    ) {
+      throw new ForbiddenException(
+        'Investigation is not available for exploration',
+      );
+    }
+
+    const location = await tx.caseLocation.findFirst({
+      where: {
+        id: locationId,
+        gameCaseId: progress.gameCaseId,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        imageUrl: true,
+        isInitiallyOpen: true,
+        searchActionPointCost: true,
+        clues: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            imageUrl: true,
+            tags: true,
+            isRequired: true,
+          },
+        },
+        documents: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            content: true,
+            fileUrl: true,
+          },
+        },
+        playerUnlocks: {
+          where: { playerCaseId },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!location) {
+      throw new NotFoundException('Location not found');
+    }
+
+    const isUnlocked =
+      location.isInitiallyOpen || location.playerUnlocks.length > 0;
+
+    if (!isUnlocked) {
+      throw new ForbiddenException('This location is locked');
+    }
+
+    const existingVisit = await tx.playerLocationVisit.findUnique({
+      where: {
+        playerCaseId_locationId: {
+          playerCaseId,
+          locationId,
+        },
+      },
+    });
+
+    // Repeated searches return previously discovered evidence without charging again.
+    if (existingVisit?.searchedAt) {
+      const discoveries = await tx.playerDiscovery.findMany({
+        where: {
+          playerCaseId,
+          OR: [
+            { clueId: { in: location.clues.map((clue) => clue.id) } },
+            {
+              documentId: {
+                in: location.documents.map((document) => document.id),
+              },
+            },
+          ],
+        },
+        select: {
+          type: true,
+          clueId: true,
+          documentId: true,
+          discoveredAt: true,
+        },
+      });
+
+      return {
+        location: {
+          id: location.id,
+          name: location.name,
+          description: location.description,
+          imageUrl: location.imageUrl,
+        },
+        repeatedSearch: true,
+        actionPointsSpent: 0,
+        remainingActionPoints: progress.actionPoints,
+        clues: location.clues.filter((clue) =>
+          discoveries.some((item) => item.clueId === clue.id),
+        ),
+        documents: location.documents.filter((document) =>
+          discoveries.some((item) => item.documentId === document.id),
+        ),
+      };
+    }
+
+    const cost = location.searchActionPointCost;
+
+    if (cost < 0) {
+      throw new BadRequestException('Invalid location search cost');
+    }
+
+    if (progress.actionPoints < cost) {
+      throw new BadRequestException('Insufficient action points');
+    }
+
+    // Conditional update prevents spending the same action points twice
+    // when multiple searches happen concurrently.
+    const spend = await tx.playerCase.updateMany({
+      where: {
+        id: playerCaseId,
+        userId,
+        status: PlayerCaseStatus.IN_PROGRESS,
+        currentPhase: { gte: 2 },
+        actionPoints: { gte: cost },
+      },
+      data: {
+        actionPoints: { decrement: cost },
+        lastActivityAt: new Date(),
+      },
+    });
+
+    if (spend.count !== 1) {
+      throw new BadRequestException(
+        'Insufficient action points or investigation unavailable',
+      );
+    }
+
+    await tx.playerLocationVisit.upsert({
+      where: {
+        playerCaseId_locationId: {
+          playerCaseId,
+          locationId,
+        },
+      },
+      create: {
+        playerCaseId,
+        locationId,
+        searchedAt: new Date(),
+        visitCount: 1,
+      },
+      update: {
+        searchedAt: new Date(),
+        visitCount: { increment: 1 },
+      },
+    });
+
+    const newClues = [];
+    for (const clue of location.clues) {
+      const existing = await tx.playerDiscovery.findFirst({
+        where: { playerCaseId, clueId: clue.id, type: 'CLUE' },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        await tx.playerDiscovery.create({
+          data: {
+            playerCaseId,
+            type: 'CLUE',
+            clueId: clue.id,
+          },
+        });
+        newClues.push(clue);
+      }
+    }
+
+    const newDocuments = [];
+    for (const document of location.documents) {
+      const existing = await tx.playerDiscovery.findFirst({
+        where: {
+          playerCaseId,
+          documentId: document.id,
+          type: 'DOCUMENT',
+        },
+        select: { id: true },
+      });
+
+      if (!existing) {
+        await tx.playerDiscovery.create({
+          data: {
+            playerCaseId,
+            type: 'DOCUMENT',
+            documentId: document.id,
+          },
+        });
+        newDocuments.push(document);
+      }
+    }
+    // Check leads and unlock destination locations
+const leads = await tx.caseLead.findMany({
+  where: {
+    sourceLocationId: locationId,
+  },
+  select: {
+    title: true,
+    description: true,
+    requiredClueId: true,
+    destinationLocationId: true,
+    destinationLocation: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+  },
+});
+
+const newlyUnlockedLocations: {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+}[] = [];
+
+for (const lead of leads) {
+  // If a clue is required, verify that the player discovered it
+  if (lead.requiredClueId) {
+    const requiredClue = await tx.playerDiscovery.findFirst({
+      where: {
+        playerCaseId,
+        clueId: lead.requiredClueId,
+        type: 'CLUE',
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!requiredClue) {
+      continue;
+    }
+  }
+
+  // Check whether the destination is already unlocked
+  const existingUnlock = await tx.playerLocationUnlock.findUnique({
+    where: {
+      playerCaseId_locationId: {
+        playerCaseId,
+        locationId: lead.destinationLocationId,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (existingUnlock) {
+    continue;
+  }
+
+  // Unlock the destination for this player
+  await tx.playerLocationUnlock.create({
+    data: {
+      playerCaseId,
+      locationId: lead.destinationLocationId,
+      reason: `Lead discovered: ${lead.title}`,
+    },
+  });
+
+  newlyUnlockedLocations.push({
+    id: lead.destinationLocation.id,
+    name: lead.destinationLocation.name,
+    title: lead.title,
+    description: lead.description,
+  });
+}
+
+    const updatedProgress = await tx.playerCase.findUnique({
+      where: { id: playerCaseId },
+      select: { actionPoints: true },
+    });
+
+    return {
+      location: {
+        id: location.id,
+        name: location.name,
+        description: location.description,
+        imageUrl: location.imageUrl,
+      },
+      repeatedSearch: false,
+      actionPointsSpent: cost,
+      remainingActionPoints: updatedProgress?.actionPoints ?? 0,
+      clues: newClues,
+      documents: newDocuments,
+      unlockedLocations: newlyUnlockedLocations,
+      message:
+        newClues.length || newDocuments.length
+          ? 'New evidence discovered'
+          : 'No new evidence found',
+    };
+  });
+}
+
 
 
 
