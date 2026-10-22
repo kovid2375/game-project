@@ -9,6 +9,7 @@ import { AdminAuthModule } from './admin-auth/admin-auth.module.js';
 import { AdminUsersModule } from './admin-users/admin-users.module.js';
 import { AdminCasesModule } from './admin-cases/admin-cases.module.js';
 import { GameplayModule } from './gameplay/gameplay.module.js';
+import { LeaderboardModule } from './leaderboard/leaderboard.module.js';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -18,6 +19,7 @@ import { GameplayModule } from './gameplay/gameplay.module.js';
     AdminUsersModule,
     AdminCasesModule,
     GameplayModule,
+    LeaderboardModule,
     ThrottlerModule.forRoot([{
       ttl:60_000,
       limit:10,

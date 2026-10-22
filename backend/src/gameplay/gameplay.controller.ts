@@ -7,16 +7,23 @@ import {
   Req,
   UnauthorizedException,
   UseGuards,
+  Delete,
+  Patch,
+  Body
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { GameplayService } from './gameplay.service.js';
+import { CreateNotebookEntryDto } from './dto/create-notebook-entry.dto.js';
+import { UpdateNotebookEntryDto } from './dto/update-notebook-entry.dto.js';
+import { UpdateTheoryDraftDto } from './dto/update-theory-draft.dto.js';
+import { SubmitAccusationDto } from './dto/submit-accusation.dto.js';
 
 @Controller('gameplay')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class GameplayController {
-  constructor(private readonly gameplauService: GameplayService) {}
+  constructor(private readonly gameplayService: GameplayService) {}
 
   @Post('Cases/:caseId/start')
   @ApiOperation({ summary: 'start a case' })
@@ -32,7 +39,7 @@ export class GameplayController {
       // fail closed if your Jwt startegy does not provide a user ID
       throw new Error('Authenticated User Id is missing');
     }
-    return this.gameplauService.startOrResumeCase(caseId, userId);
+    return this.gameplayService.startOrResumeCase(caseId, userId);
   }
 
   @Get(':playerCaseId/case-file')
@@ -49,7 +56,7 @@ export class GameplayController {
       // fail closed if your Jwt startegy does not provide a user ID
       throw new Error('Authenticated User Id is missing');
     }
-    return this.gameplauService.getCaseFile(userId, playerCaseId);
+    return this.gameplayService.getCaseFile(userId, playerCaseId);
   }
 
   @Post(':playerCaseId/ready-for-suspects')
@@ -67,7 +74,7 @@ export class GameplayController {
       // fail closed if your Jwt startegy does not provide a user ID
       throw new Error('Authenticated User Id is missing');
     }
-    return this.gameplauService.readyForSuspects(userId, playerCaseId);
+    return this.gameplayService.readyForSuspects(userId, playerCaseId);
   }
 
   @Get(':playerCaseId/suspects')
@@ -87,7 +94,7 @@ export class GameplayController {
       // fail closed if your Jwt startegy does not provide a user ID
       throw new Error('Authenticated User Id is missing');
     }
-    return this.gameplauService.getSuspects(userId, playerCaseId);
+    return this.gameplayService.getSuspects(userId, playerCaseId);
   }
 
   
@@ -112,7 +119,7 @@ export class GameplayController {
       throw new UnauthorizedException('Authenticated user ID is missing');
     }
 
-    return this.gameplauService.getLocations(userId, playerCaseId);
+    return this.gameplayService.getLocations(userId, playerCaseId);
   }
   
 @Get(':playerCaseId/locations/:locationId')
@@ -128,7 +135,7 @@ getLocationDetails(
     throw new UnauthorizedException('Authenticated user ID is missing');
   }
 
-  return this.gameplauService.getLocationDetails(
+  return this.gameplayService.getLocationDetails(
     userId,
     playerCaseId,
     locationId,
@@ -153,7 +160,7 @@ investigateLocation(
     throw new UnauthorizedException('Authenticated user ID is missing');
   }
 
-  return this.gameplauService.investigateLocation(
+  return this.gameplayService.investigateLocation(
     userId,
     playerCaseId,
     locationId,
@@ -182,7 +189,7 @@ investigateLocation(
       // fail closed if your Jwt startegy does not provide a user ID
       throw new Error('Authenticated User Id is missing');
     }
-    return this.gameplauService.getSuspectDossier(
+    return this.gameplayService.getSuspectDossier(
       userId,
       playerCaseId,
       suspectId,
@@ -214,7 +221,7 @@ investigateLocation(
       throw new UnauthorizedException('Authenticated user ID is missing');
     }
 
-    return this.gameplauService.getInterviewQuestions(
+    return this.gameplayService.getInterviewQuestions(
       userId,
       playerCaseId,
       suspectId,
@@ -255,7 +262,7 @@ investigateLocation(
       throw new UnauthorizedException('Authenticated user ID is missing');
     }
 
-    return this.gameplauService.answerInterviewQuestion(
+    return this.gameplayService.answerInterviewQuestion(
       userId,
       playerCaseId,
       suspectId,
@@ -288,10 +295,183 @@ investigateLocation(
       throw new UnauthorizedException('Authenticated user ID is missing');
     }
 
-    return this.gameplauService.startInterviewVisit(
+    return this.gameplayService.startInterviewVisit(
       userId,
       playerCaseId,
       suspectId,
     );
   }
+
+
+  
+@Post(':playerCaseId/notebook')
+createNotebookEntry(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Body() dto: CreateNotebookEntryDto,
+) {
+  return this.gameplayService.createNotebookEntry(
+    req.user.sub,
+    playerCaseId,
+    dto,
+  );
+}
+
+@Get(':playerCaseId/notebook')
+getNotebookEntries(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+) {
+  return this.gameplayService.getNotebookEntries(
+    req.user.sub,
+    playerCaseId,
+  );
+}
+
+@Get(':playerCaseId/notebook/:entryId')
+getNotebookEntry(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('entryId', ParseUUIDPipe) entryId: string,
+) {
+  return this.gameplayService.getNotebookEntry(
+    req.user.sub,
+    playerCaseId,
+    entryId,
+  );
+}
+
+@Patch(':playerCaseId/notebook/:entryId')
+updateNotebookEntry(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('entryId', ParseUUIDPipe) entryId: string,
+  @Body() dto: UpdateNotebookEntryDto,
+) {
+  return this.gameplayService.updateNotebookEntry(
+    req.user.sub,
+    playerCaseId,
+    entryId,
+    dto,
+  );
+}
+
+@Delete(':playerCaseId/notebook/:entryId')
+deleteNotebookEntry(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('entryId', ParseUUIDPipe) entryId: string,
+) {
+  return this.gameplayService.deleteNotebookEntry(
+    req.user.sub,
+    playerCaseId,
+    entryId,
+  );
+}
+
+
+@Get(':playerCaseId/theory')
+getTheoryDraft(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+) {
+  return this.gameplayService.getTheoryDraft(
+    req.user.sub,
+    playerCaseId,
+  );
+}
+
+@Patch(':playerCaseId/theory')
+updateTheoryDraft(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Body() dto: UpdateTheoryDraftDto,
+) {
+  return this.gameplayService.updateTheoryDraft(
+    req.user.sub,
+    playerCaseId,
+    dto,
+  );
+}
+
+@Post(':playerCaseId/theory/evidence/:clueId')
+addTheoryEvidence(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('clueId', ParseUUIDPipe) clueId: string,
+) {
+  return this.gameplayService.addTheoryEvidence(
+    req.user.sub,
+    playerCaseId,
+    clueId,
+  );
+}
+
+@Delete(':playerCaseId/theory/evidence/:clueId')
+removeTheoryEvidence(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('clueId', ParseUUIDPipe) clueId: string,
+) {
+  return this.gameplayService.removeTheoryEvidence(
+    req.user.sub,
+    playerCaseId,
+    clueId,
+  );
+}
+
+
+@Post(':playerCaseId/accusation')
+submitAccusation(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Body() dto: SubmitAccusationDto,
+) {
+  return this.gameplayService.submitAccusation(
+    req.user.sub,
+    playerCaseId,
+    dto,
+  );
+}
+
+
+@Get(':playerCaseId/results')
+getCaseResults(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+) {
+  return this.gameplayService.getCaseResults(
+    req.user.sub,
+    playerCaseId,
+  );
+}
+
+
+
+@Get(':playerCaseId/hints')
+getCaseHints(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+) {
+  return this.gameplayService.getCaseHints(
+    req.user.sub,
+    playerCaseId,
+  );
+}
+
+@Post(':playerCaseId/hints/:hintId/unlock')
+unlockCaseHint(
+  @Req() req: any,
+  @Param('playerCaseId', ParseUUIDPipe) playerCaseId: string,
+  @Param('hintId', ParseUUIDPipe) hintId: string,
+) {
+  return this.gameplayService.unlockCaseHint(
+    req.user.sub,
+    playerCaseId,
+    hintId,
+  );
+}
+
+
+
 }

@@ -299,11 +299,27 @@ model CaseHint {
   hintNumber   Int
   content      String @db.VarChar(2000)
   scorePenalty Int    @default(0)
+  playerHints PlayerHint[]
 
   gameCase GameCase @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
 
   @@unique([gameCaseId, hintNumber])
 }
+
+model PlayerHint {
+  id           String   @id @default(uuid()) @db.Uuid
+  playerCaseId String   @db.Uuid
+  caseHintId   String   @db.Uuid
+  unlockedAt   DateTime @default(now())
+
+  playerCase PlayerCase @relation(fields: [playerCaseId],references: [id],onDelete: Cascade)
+
+  caseHint CaseHint @relation(fields: [caseHintId],references: [id],onDelete: Cascade)
+
+  @@unique([playerCaseId, caseHintId])
+  @@index([playerCaseId])
+}
+
 
 // -------------------- PLAYER PROGRESS --------------------
 
@@ -321,6 +337,7 @@ model PlayerCase {
   startedAt        DateTime         @default(now())
   completedAt      DateTime?
   lastActivityAt   DateTime         @default(now())
+  
 
   user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   gameCase       GameCase              @relation(fields: [gameCaseId], references: [id], onDelete: Restrict)
@@ -333,6 +350,7 @@ model PlayerCase {
   notebook       NotebookEntry[]
   suspectUnlocks PlayerSuspectUnlock[]
   locationUnlocks PlayerLocationUnlock[]
+  hints PlayerHint[]
   
 
   @@unique([userId, gameCaseId])
@@ -355,6 +373,9 @@ model PlayerDiscovery {
   interviewResponse InterviewResponse? @relation(fields: [interviewResponseId], references: [id], onDelete: Cascade)
 
   @@index([playerCaseId, discoveredAt])
+  @@unique([playerCaseId, clueId])
+  @@unique([playerCaseId, documentId])
+  @@unique([playerCaseId, interviewResponseId])
 }
 
 model PlayerLocationVisit {
@@ -466,6 +487,8 @@ model CaseSolution {
   method           String   @db.VarChar(2000)
   explanation      String   @db.VarChar(5000)
   epilogue         String   @db.VarChar(5000)
+  motiveKeywords String[] @default([])
+methodKeywords String[] @default([])
   updatedAt        DateTime @updatedAt
 
   gameCase       GameCase    @relation(fields: [gameCaseId], references: [id], onDelete: Cascade)
