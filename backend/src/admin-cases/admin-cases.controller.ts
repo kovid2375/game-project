@@ -17,6 +17,7 @@ import {
   ParseUUIDPipe,
   BadRequestException,
   Get,
+  Put,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -43,6 +44,15 @@ import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
 import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
 import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
 import { CreateCaseLeadDto } from './dto/create-case-lead.dto.js';
+import { CreateCaseHintDto } from './dto/create-case-hint.dto.js';
+import { UpdateCaseHintDto } from './dto/update-case-hint.dto.js';
+import { UpsertCaseSolutionDto } from './dto/upsert-case-solution.dto.js';
+import { CreateLocationDto } from './dto/create-location.dto.js';
+import { UpdateLocationDto } from './dto/update-location.dto.js';
+import { CreateClueDto } from './dto/create-clue.dto.js';
+import { UpdateClueDto } from './dto/update-clue.dto.js';
+import { CreateDocumentDto } from './dto/create-document.dto.js';
+import { UpdateDocumentDto } from './dto/update-document.dto.js';
 
 @ApiTags('Admin Cases')
 @ApiBearerAuth()
@@ -316,9 +326,196 @@ deleteLead(
 }
 
 
+@Post(':caseId/hints')
+@ApiOperation({ summary: 'Create a hint for a case' })
+@ApiResponse({ status: 201, description: 'Hint created successfully' })
+@ApiResponse({ status: 400, description: 'Invalid request data' })
+@ApiResponse({ status: 404, description: 'Case not found' })
+createCaseHint(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Body() dto: CreateCaseHintDto,
+) {
+  return this.adminCasesService.createCaseHint(caseId, dto);
+}
+
+@Get(':caseId/hints')
+@ApiOperation({ summary: 'Get all hints for a case' })
+@ApiResponse({ status: 200, description: 'Case hints retrieved successfully' })
+@ApiResponse({ status: 404, description: 'Case not found' })
+getCaseHints(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getCaseHints(caseId);
+}
+
+@Patch(':caseId/hints/:hintId')
+@ApiOperation({ summary: 'Update a hint for a case' })
+@ApiResponse({ status: 200, description: 'Hint updated successfully' })
+@ApiResponse({ status: 400, description: 'Invalid request data' })
+@ApiResponse({ status: 404, description: 'Hint not found' })
+updateCaseHint(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('hintId', ParseUUIDPipe) hintId: string,
+  @Body() dto: UpdateCaseHintDto,
+) {
+  return this.adminCasesService.updateCaseHint(caseId, hintId, dto);
+}
+
+@Delete(':caseId/hints/:hintId')
+@ApiOperation({ summary: 'Delete a hint from a case' })
+@ApiResponse({ status: 200, description: 'Hint deleted successfully' })
+@ApiResponse({ status: 404, description: 'Hint not found' })
+deleteCaseHint(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('hintId', ParseUUIDPipe) hintId: string,
+) {
+  return this.adminCasesService.deleteCaseHint(caseId, hintId);
+}
 
 
 
+@Put(':caseId/solution')
+upsertCaseSolution(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Body() dto: UpsertCaseSolutionDto,
+) {
+  return this.adminCasesService.upsertCaseSolution(caseId, dto);
+}
+
+
+@Post(':caseId/locations')
+createLocation(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Body() dto: CreateLocationDto,
+) {
+  return this.adminCasesService.createLocation(caseId, dto);
+}
+
+@Get(':caseId/locations')
+getLocations(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getLocations(caseId);
+}
+
+@Patch(':caseId/locations/:locationId')
+updateLocation(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Body() dto: UpdateLocationDto,
+) {
+  return this.adminCasesService.updateLocation(
+    caseId,
+    locationId,
+    dto,
+  );
+}
+
+@Delete(':caseId/locations/:locationId')
+deleteLocation(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+) {
+  return this.adminCasesService.deleteLocation(caseId, locationId);
+}
+
+@Post(':caseId/locations/:locationId/clues')
+createClue(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Body() dto: CreateClueDto,
+) {
+  return this.adminCasesService.createClue(
+    caseId,
+    locationId,
+    dto,
+  );
+}
+
+@Get(':caseId/locations/:locationId/clues')
+getClues(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+) {
+  return this.adminCasesService.getClues(caseId, locationId);
+}
+
+@Patch(':caseId/locations/:locationId/clues/:clueId')
+updateClue(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Param('clueId', ParseUUIDPipe) clueId: string,
+  @Body() dto: UpdateClueDto,
+) {
+  return this.adminCasesService.updateClue(
+    caseId,
+    locationId,
+    clueId,
+    dto,
+  );
+}
+
+@Delete(':caseId/locations/:locationId/clues/:clueId')
+deleteClue(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Param('clueId', ParseUUIDPipe) clueId: string,
+) {
+  return this.adminCasesService.deleteClue(
+    caseId,
+    locationId,
+    clueId,
+  );
+}
+
+@Post(':caseId/locations/:locationId/documents')
+createDocument(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Body() dto: CreateDocumentDto,
+) {
+  return this.adminCasesService.createDocument(
+    caseId,
+    locationId,
+    dto,
+  );
+}
+
+@Get(':caseId/locations/:locationId/documents')
+getDocuments(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+) {
+  return this.adminCasesService.getDocuments(caseId, locationId);
+}
+
+@Patch(':caseId/locations/:locationId/documents/:documentId')
+updateDocument(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Param('documentId', ParseUUIDPipe) documentId: string,
+  @Body() dto: UpdateDocumentDto,
+) {
+  return this.adminCasesService.updateDocument(
+    caseId,
+    locationId,
+    documentId,
+    dto,
+  );
+}
+
+@Delete(':caseId/locations/:locationId/documents/:documentId')
+deleteDocument(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+  @Param('locationId', ParseUUIDPipe) locationId: string,
+  @Param('documentId', ParseUUIDPipe) documentId: string,
+) {
+  return this.adminCasesService.deleteDocument(
+    caseId,
+    locationId,
+    documentId,
+  );
+}
 
 
 

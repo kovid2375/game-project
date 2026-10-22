@@ -17,7 +17,9 @@ import { SubmitAccusationDto } from './dto/submit-accusation.dto.js';
 
 @Injectable()
 export class GameplayService {
-  constructor(private readonly prisma: PrismaService,private readonly MAX_ACCUSATION_ATTEMPTS = 3) {}
+  private readonly MAX_ACCUSATION_ATTEMPTS = 3;
+
+  constructor(private readonly prisma: PrismaService) {}
   async startOrResumeCase(caseId: string, userId: string) {
     const gameCase = await this.prisma.gameCase.findFirst({
       where: {

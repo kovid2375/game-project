@@ -16,6 +16,15 @@ import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
 import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
 import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
 import { CreateCaseLeadDto } from './dto/create-case-lead.dto.js';
+import { CreateCaseHintDto } from './dto/create-case-hint.dto.js';
+import { UpdateCaseHintDto } from './dto/update-case-hint.dto.js';
+import { UpsertCaseSolutionDto } from './dto/upsert-case-solution.dto.js';
+import { CreateLocationDto } from './dto/create-location.dto.js';
+import { UpdateLocationDto } from './dto/update-location.dto.js';
+import { CreateClueDto } from './dto/create-clue.dto.js';
+import { UpdateClueDto } from './dto/update-clue.dto.js';
+import { CreateDocumentDto } from './dto/create-document.dto.js';
+import { UpdateDocumentDto } from './dto/update-document.dto.js';
 @Injectable()
 export class AdminCasesService {
   constructor(
@@ -875,6 +884,539 @@ async deleteLead(caseId: string, leadId: string) {
     leadId: lead.id,
   };
 }
+
+
+async createCaseHint(
+  caseId: string,
+  dto: CreateCaseHintDto,
+) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  const existing = await this.prisma.caseHint.findUnique({
+    where: {
+      gameCaseId_hintNumber: {
+        gameCaseId: caseId,
+        hintNumber: dto.hintNumber,
+      },
+    },
+  });
+
+  if (existing) {
+    throw new ConflictException(
+      'A hint with this number already exists for this case',
+    );
+  }
+
+  return this.prisma.caseHint.create({
+    data: {
+      gameCaseId: caseId,
+      hintNumber: dto.hintNumber,
+      content: dto.content,
+      scorePenalty: dto.scorePenalty ?? 0,
+    },
+  });
+}
+
+async getCaseHints(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseHint.findMany({
+    where: { gameCaseId: caseId },
+    orderBy: { hintNumber: 'asc' },
+  });
+}
+
+async updateCaseHint(
+  caseId: string,
+  hintId: string,
+  dto: UpdateCaseHintDto,
+) {
+  const hint = await this.prisma.caseHint.findFirst({
+    where: {
+      id: hintId,
+      gameCaseId: caseId,
+    },
+  });
+
+  if (!hint) {
+    throw new NotFoundException('Hint not found in this case');
+  }
+
+  if (dto.hintNumber !== undefined) {
+    const duplicate = await this.prisma.caseHint.findFirst({
+      where: {
+        gameCaseId: caseId,
+        hintNumber: dto.hintNumber,
+        NOT: { id: hintId },
+      },
+      select: { id: true },
+    });
+
+    if (duplicate) {
+      throw new ConflictException(
+        'A hint with this number already exists for this case',
+      );
+    }
+  }
+
+  return this.prisma.caseHint.update({
+    where: { id: hintId },
+    data: {
+      ...(dto.hintNumber !== undefined && {
+        hintNumber: dto.hintNumber,
+      }),
+      ...(dto.content !== undefined && {
+        content: dto.content,
+      }),
+      ...(dto.scorePenalty !== undefined && {
+        scorePenalty: dto.scorePenalty,
+      }),
+    },
+  });
+}
+
+async deleteCaseHint(caseId: string, hintId: string) {
+  const hint = await this.prisma.caseHint.findFirst({
+    where: {
+      id: hintId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!hint) {
+    throw new NotFoundException('Hint not found in this case');
+  }
+
+  await this.prisma.caseHint.delete({
+    where: { id: hintId },
+  });
+
+  return { message: 'Hint deleted successfully' };
+}
+
+
+async upsertCaseSolution(
+  caseId: string,
+  dto: UpsertCaseSolutionDto,
+) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  const suspect = await this.prisma.caseSuspect.findFirst({
+    where: {
+      id: dto.correctSuspectId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!suspect) {
+    throw new NotFoundException(
+      'Correct suspect must belong to this case',
+    );
+  }
+
+  return this.prisma.caseSolution.upsert({
+    where: { gameCaseId: caseId },
+    create: {
+      gameCaseId: caseId,
+      correctSuspectId: dto.correctSuspectId,
+      motive: dto.motive,
+      method: dto.method,
+      explanation: dto.explanation,
+      epilogue: dto.epilogue,
+      motiveKeywords: dto.motiveKeywords ?? [],
+      methodKeywords: dto.methodKeywords ?? [],
+    },
+    update: {
+      correctSuspectId: dto.correctSuspectId,
+      motive: dto.motive,
+      method: dto.method,
+      explanation: dto.explanation,
+      epilogue: dto.epilogue,
+      motiveKeywords: dto.motiveKeywords ?? [],
+      methodKeywords: dto.methodKeywords ?? [],
+    },
+  });
+}
+
+
+
+async createLocation(
+  caseId: string,
+  dto: CreateLocationDto,
+) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseLocation.create({
+    data: {
+      gameCaseId: caseId,
+      name: dto.name,
+      description: dto.description,
+      imageUrl: dto.imageUrl,
+      mapX: dto.mapX,
+      mapY: dto.mapY,
+      isInitiallyOpen: dto.isInitiallyOpen ?? false,
+      isDeadEnd: dto.isDeadEnd ?? false,
+      searchActionPointCost: dto.searchActionPointCost ?? 1,
+      sortOrder: dto.sortOrder ?? 0,
+    },
+  });
+}
+
+async getLocations(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseLocation.findMany({
+    where: { gameCaseId: caseId },
+    orderBy: { sortOrder: 'asc' },
+  });
+}
+
+async updateLocation(
+  caseId: string,
+  locationId: string,
+  dto: UpdateLocationDto,
+) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: {
+      id: locationId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  return this.prisma.caseLocation.update({
+    where: { id: locationId },
+    data: {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.description !== undefined && {
+        description: dto.description,
+      }),
+      ...(dto.imageUrl !== undefined && {
+        imageUrl: dto.imageUrl,
+      }),
+      ...(dto.mapX !== undefined && { mapX: dto.mapX }),
+      ...(dto.mapY !== undefined && { mapY: dto.mapY }),
+      ...(dto.isInitiallyOpen !== undefined && {
+        isInitiallyOpen: dto.isInitiallyOpen,
+      }),
+      ...(dto.isDeadEnd !== undefined && {
+        isDeadEnd: dto.isDeadEnd,
+      }),
+      ...(dto.searchActionPointCost !== undefined && {
+        searchActionPointCost: dto.searchActionPointCost,
+      }),
+      ...(dto.sortOrder !== undefined && {
+        sortOrder: dto.sortOrder,
+      }),
+    },
+  });
+}
+
+async deleteLocation(
+  caseId: string,
+  locationId: string,
+) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: {
+      id: locationId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  await this.prisma.caseLocation.delete({
+    where: { id: locationId },
+  });
+
+  return { message: 'Location deleted successfully' };
+}
+
+
+async createClue(
+  caseId: string,
+  locationId: string,
+  dto: CreateClueDto,
+) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: {
+      id: locationId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  return this.prisma.caseClue.create({
+    data: {
+      locationId,
+      title: dto.title,
+      description: dto.description,
+      imageUrl: dto.imageUrl,
+      tags: dto.tags ?? [],
+      isRequired: dto.isRequired ?? false,
+      sortOrder: dto.sortOrder ?? 0,
+    },
+  });
+}
+
+async getClues(caseId: string, locationId: string) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: {
+      id: locationId,
+      gameCaseId: caseId,
+    },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  return this.prisma.caseClue.findMany({
+    where: { locationId },
+    orderBy: { sortOrder: 'asc' },
+  });
+}
+
+async updateClue(
+  caseId: string,
+  locationId: string,
+  clueId: string,
+  dto: UpdateClueDto,
+) {
+  const clue = await this.prisma.caseClue.findFirst({
+    where: {
+      id: clueId,
+      locationId,
+      location: { gameCaseId: caseId },
+    },
+    select: { id: true },
+  });
+
+  if (!clue) {
+    throw new NotFoundException(
+      'Clue not found at this location in this case',
+    );
+  }
+
+  return this.prisma.caseClue.update({
+    where: { id: clueId },
+    data: {
+      ...(dto.title !== undefined && { title: dto.title }),
+      ...(dto.description !== undefined && {
+        description: dto.description,
+      }),
+      ...(dto.imageUrl !== undefined && {
+        imageUrl: dto.imageUrl,
+      }),
+      ...(dto.tags !== undefined && { tags: dto.tags }),
+      ...(dto.isRequired !== undefined && {
+        isRequired: dto.isRequired,
+      }),
+      ...(dto.sortOrder !== undefined && {
+        sortOrder: dto.sortOrder,
+      }),
+    },
+  });
+}
+
+async deleteClue(
+  caseId: string,
+  locationId: string,
+  clueId: string,
+) {
+  const clue = await this.prisma.caseClue.findFirst({
+    where: {
+      id: clueId,
+      locationId,
+      location: { gameCaseId: caseId },
+    },
+    select: { id: true },
+  });
+
+  if (!clue) {
+    throw new NotFoundException(
+      'Clue not found at this location in this case',
+    );
+  }
+
+  await this.prisma.caseClue.delete({
+    where: { id: clueId },
+  });
+
+  return { message: 'Clue deleted successfully' };
+}
+
+
+async createDocument(
+  caseId: string,
+  locationId: string,
+  dto: CreateDocumentDto,
+) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: { id: locationId, gameCaseId: caseId },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  return this.prisma.caseDocument.create({
+    data: {
+      locationId,
+      title: dto.title,
+      description: dto.description,
+      content: dto.content,
+      fileUrl: dto.fileUrl,
+      sortOrder: dto.sortOrder ?? 0,
+    },
+  });
+}
+
+async getDocuments(caseId: string, locationId: string) {
+  const location = await this.prisma.caseLocation.findFirst({
+    where: { id: locationId, gameCaseId: caseId },
+    select: { id: true },
+  });
+
+  if (!location) {
+    throw new NotFoundException(
+      'Location not found in this case',
+    );
+  }
+
+  return this.prisma.caseDocument.findMany({
+    where: { locationId },
+    orderBy: { sortOrder: 'asc' },
+  });
+}
+
+async updateDocument(
+  caseId: string,
+  locationId: string,
+  documentId: string,
+  dto: UpdateDocumentDto,
+) {
+  const document = await this.prisma.caseDocument.findFirst({
+    where: {
+      id: documentId,
+      locationId,
+      location: { gameCaseId: caseId },
+    },
+    select: { id: true },
+  });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Document not found in this location and case',
+    );
+  }
+
+  return this.prisma.caseDocument.update({
+    where: { id: documentId },
+    data: {
+      ...(dto.title !== undefined && { title: dto.title }),
+      ...(dto.description !== undefined && {
+        description: dto.description,
+      }),
+      ...(dto.content !== undefined && { content: dto.content }),
+      ...(dto.fileUrl !== undefined && { fileUrl: dto.fileUrl }),
+      ...(dto.sortOrder !== undefined && {
+        sortOrder: dto.sortOrder,
+      }),
+    },
+  });
+}
+
+async deleteDocument(
+  caseId: string,
+  locationId: string,
+  documentId: string,
+) {
+  const document = await this.prisma.caseDocument.findFirst({
+    where: {
+      id: documentId,
+      locationId,
+      location: { gameCaseId: caseId },
+    },
+    select: { id: true },
+  });
+
+  if (!document) {
+    throw new NotFoundException(
+      'Document not found in this location and case',
+    );
+  }
+
+  await this.prisma.caseDocument.delete({
+    where: { id: documentId },
+  });
+
+  return { message: 'Document deleted successfully' };
+}
+
+
+
+
 
 
 
