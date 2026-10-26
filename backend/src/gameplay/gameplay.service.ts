@@ -1068,14 +1068,12 @@ async answerInterviewQuestion(
 
   const thread = await this.prisma.interviewThread.findFirst({
     where: {
-      id: threadId,
-      suspectId,
-      visitNumber: { lte: visit.visitNumber },
-      OR: [
-        { isInitiallyAvailable: true },
-        { visitNumber: { lte: visit.visitNumber } },
-      ],
-    },
+  id: threadId,
+  suspectId,
+  visitNumber: {
+    lte: visit.visitNumber,
+  },
+},
     select: {
       id: true,
       topic: true,
@@ -1507,14 +1505,23 @@ async updateTheoryDraft(
   playerCaseId: string,
   dto: UpdateTheoryDraftDto,
 ) {
-  const playerCase = await this.prisma.playerCase.findFirst({
-    where: { id: playerCaseId, userId },
-    select: { id: true, gameCaseId: true },
-  });
+ const playerCase = await this.prisma.playerCase.findFirst({
+  where: { id: playerCaseId, userId },
+  select: {
+    id: true,
+    gameCaseId: true,
+    status: true,
+  },
+});
 
   if (!playerCase) {
     throw new NotFoundException('Case progress not found');
   }
+  if (playerCase.status !== PlayerCaseStatus.IN_PROGRESS) {
+  throw new ConflictException(
+    'Theory cannot be modified after the investigation ends',
+  );
+}
 
   if (dto.suspectId) {
     const suspect = await this.prisma.caseSuspect.findFirst({
@@ -1561,14 +1568,26 @@ async addTheoryEvidence(
   playerCaseId: string,
   clueId: string,
 ) {
-  const playerCase = await this.prisma.playerCase.findFirst({
-    where: { id: playerCaseId, userId },
-    select: { id: true, gameCaseId: true },
-  });
+  
+const playerCase = await this.prisma.playerCase.findFirst({
+  where: { id: playerCaseId, userId },
+  select: {
+    id: true,
+    gameCaseId: true,
+    status: true,
+  },
+});
 
-  if (!playerCase) {
-    throw new NotFoundException('Case progress not found');
-  }
+if (!playerCase) {
+  throw new NotFoundException('Case progress not found');
+}
+
+if (playerCase.status !== PlayerCaseStatus.IN_PROGRESS) {
+  throw new ConflictException(
+    'Evidence cannot be added to a theory after the investigation ends',
+  );
+}
+
 
   const clue = await this.prisma.caseClue.findFirst({
     where: {
@@ -1640,13 +1659,21 @@ async removeTheoryEvidence(
   clueId: string,
 ) {
   const playerCase = await this.prisma.playerCase.findFirst({
-    where: { id: playerCaseId, userId },
-    select: { id: true },
-  });
+  where: { id: playerCaseId, userId },
+  select: {
+    id: true,
+    status: true,
+  },
+});
 
   if (!playerCase) {
     throw new NotFoundException('Case progress not found');
   }
+  if (playerCase.status !== PlayerCaseStatus.IN_PROGRESS) {
+  throw new ConflictException(
+    'Evidence cannot be removed from a theory after the investigation ends',
+  );
+}
 
   const draft = await this.prisma.theoryDraft.findUnique({
     where: { playerCaseId },
@@ -1969,6 +1996,11 @@ async getCaseHints(userId: string, playerCaseId: string) {
   if (!playerCase) {
     throw new NotFoundException('Case progress not found');
   }
+  if (playerCase.status !== PlayerCaseStatus.IN_PROGRESS) {
+  throw new ConflictException(
+    'Hints are only available during an active investigation',
+  );
+}
 
   const hints = await this.prisma.caseHint.findMany({
     where: { gameCaseId: playerCase.gameCaseId },
@@ -2124,10 +2156,4 @@ async unlockCaseHint(
     'Unable to unlock the hint right now. Please try again.',
   );
 }
-
-
-
-
-
-
 }

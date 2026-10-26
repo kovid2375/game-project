@@ -25,6 +25,11 @@ import { CreateClueDto } from './dto/create-clue.dto.js';
 import { UpdateClueDto } from './dto/update-clue.dto.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
 import { UpdateDocumentDto } from './dto/update-document.dto.js';
+import { UpsertCaseVictimDto } from './dto/upsert-case-victim.dto.js';
+import { UpsertPoliceReportDto } from './dto/upsert-police-report.dto.js';
+import { UpdateInterviewThreadDto } from './dto/update-interview-thread.dto.js';
+import { UpdateInterviewResponseDto } from './dto/update-interview-response.dto.js';
+import { UpdateInterviewResponseUnlockDto } from './dto/update-interview-response-unlock.dto.js';
 @Injectable()
 export class AdminCasesService {
   constructor(
@@ -205,35 +210,217 @@ export class AdminCasesService {
       throw error;
     }
   }
-  async setPublished(id: string, isPublished: boolean) {
-    try {
-      const updated = await this.prisma.gameCase.update({
-        where: { id },
-        data: { isPublished },
-      });
+  
+async validateCaseForPublishing(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    include: {
+      victim: true,
+      policeReport: true,
+      suspects: {
+        include: {
+          threads: {
+            include: {
+              responses: true,
+            },
+          },
+        },
+      },
+      locations: {
+        include: {
+          clues: true,
+          documents: true,
+          leadsFrom: true,
+        },
+      },
+      solution: true,
+      hints: true,
+    },
+  });
 
-      return {
-        id: updated.id,
-        caseNumber: updated.caseNumber,
-        title: updated.title,
-        isPublished: updated.isPublished,
-        message: isPublished
-          ? 'Case published successfully'
-          : 'Case unpublished successfully',
-      };
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException('Case not found');
-      }
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
 
-      throw error;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!gameCase.title?.trim()) {
+    errors.push('Case title is required.');
+  }
+
+  if (!gameCase.description?.trim()) {
+    errors.push('Case description is required.');
+  }
+
+  if (!gameCase.coverImageUrl?.trim()) {
+    errors.push('Case cover image is required.');
+  }
+
+  if (!gameCase.victim) {
+    errors.push('Victim information is missing.');
+  }
+
+  if (!gameCase.policeReport) {
+    errors.push('Police report is missing.');
+  } else {
+    const report = gameCase.policeReport;
+
+    if (!report.causeOfDeath.trim()) {
+      errors.push('Police report cause of death is required.');
+    }
+
+    if (!report.officerNotes.trim()) {
+      errors.push('Police officer notes are required.');
+    }
+
+    if (
+      report.timeOfDeathStart &&
+      report.timeOfDeathEnd &&
+      report.timeOfDeathEnd < report.timeOfDeathStart
+    ) {
+      errors.push(
+        'Police report time-of-death end must not precede its start.',
+      );
+    }
+
+    if (!report.isPublished) {
+      warnings.push('Police report is not published.');
     }
   }
+
+  if (gameCase.suspects.length < 2) {
+    errors.push('At least two suspects are required.');
+  }
+
+  for (const suspect of gameCase.suspects) {
+    if (suspect.threads.length === 0) {
+      warnings.push(
+        `Suspect "${suspect.name}" has no interview questions.`,
+      );
+      continue;
+    }
+
+    const hasResponse = suspect.threads.some(
+      (thread) => thread.responses.length > 0,
+    );
+
+    if (!hasResponse) {
+      warnings.push(
+        `Suspect "${suspect.name}" has no interview responses.`,
+      );
+    }
+  }
+
+  if (gameCase.locations.length === 0) {
+    errors.push('At least one investigation location is required.');
+  }
+
+  const totalClues = gameCase.locations.reduce(
+    (count, location) => count + location.clues.length,
+    0,
+  );
+
+  if (totalClues === 0) {
+    errors.push('At least one clue is required.');
+  }
+
+  if (!gameCase.locations.some((location) => location.documents.length > 0)) {
+    warnings.push('No investigation documents have been added.');
+  }
+
+  const totalLeads = gameCase.locations.reduce(
+    (count, location) => count + location.leadsFrom.length,
+    0,
+  );
+
+  if (totalLeads === 0) {
+    warnings.push('No leads connect investigation locations.');
+  }
+
+  if (!gameCase.solution) {
+    errors.push('Case solution is missing.');
+  } else {
+    const correctSuspectExists = gameCase.suspects.some(
+      (suspect) => suspect.id === gameCase.solution!.correctSuspectId,
+    );
+
+    if (!correctSuspectExists) {
+      errors.push(
+        'The solution references a suspect that does not belong to this case.',
+      );
+    }
+
+    if (!gameCase.solution.motive.trim()) {
+      errors.push('Solution motive is required.');
+    }
+
+    if (!gameCase.solution.method.trim()) {
+      errors.push('Solution method is required.');
+    }
+
+    if (!gameCase.solution.explanation.trim()) {
+      errors.push('Solution explanation is required.');
+    }
+  }
+
+  if (gameCase.hints.length === 0) {
+    warnings.push('No hints have been configured.');
+  }
+
+  return {
+    caseId: gameCase.id,
+    caseNumber: gameCase.caseNumber,
+    title: gameCase.title,
+    readyToPublish: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+  
+
+async setPublished(id: string, isPublished: boolean) {
+  // Confirm the case exists before validating or updating it.
+  const existingCase = await this.prisma.gameCase.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!existingCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  // Validate before publishing. Unpublishing remains allowed.
+  if (isPublished) {
+    const validation = await this.validateCaseForPublishing(id);
+
+    if (!validation.readyToPublish) {
+      throw new BadRequestException({
+        message: 'Case cannot be published because validation failed.',
+        errors: validation.errors,
+        warnings: validation.warnings,
+      });
+    }
+  }
+
+  const updated = await this.prisma.gameCase.update({
+    where: { id },
+    data: { isPublished },
+  });
+
+  return {
+    id: updated.id,
+    caseNumber: updated.caseNumber,
+    title: updated.title,
+    isPublished: updated.isPublished,
+    message: isPublished
+      ? 'Case published successfully'
+      : 'Case unpublished successfully',
+  };
+}
+
+
   async remove(id: string) {
     try {
       await this.prisma.gameCase.delete({
@@ -281,6 +468,73 @@ export class AdminCasesService {
       priceInPaise: undefined,
     };
   }
+  
+async getCasePreview(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    include: {
+      victim: true,
+      policeReport: true,
+      statements: true,
+      suspects: {
+        include: {
+          threads: {
+            orderBy: [
+              { visitNumber: 'asc' },
+              { sortOrder: 'asc' },
+            ],
+            include: {
+              responses: {
+                orderBy: { sortOrder: 'asc' },
+                include: {
+                  unlocks: {
+                    include: {
+                      clue: true,
+                      document: true,
+                      location: true,
+                      suspect: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      locations: {
+        orderBy: { sortOrder: 'asc' },
+        include: {
+          clues: {
+            orderBy: { sortOrder: 'asc' },
+          },
+          documents: {
+            orderBy: { sortOrder: 'asc' },
+          },
+          leadsFrom: {
+            include: {
+              destinationLocation: true,
+              requiredClue: true,
+            },
+          },
+        },
+      },
+      hints: {
+        orderBy: { hintNumber: 'asc' },
+      },
+      solution: true,
+    },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return {
+    ...gameCase,
+    priceInRupees: gameCase.priceInPaise / 100,
+  };
+}
+
 
   async createSuspect(caseId: string, dto: CreateSuspectDto) {
     const gameCase = await this.prisma.gameCase.findUnique({
@@ -1416,14 +1670,396 @@ async deleteDocument(
 
 
 
+async getCaseVictim(caseId: string) {
+  const caseExists = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!caseExists) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseVictim.findUnique({
+    where: { gameCaseId: caseId },
+  });
+}
+
+async upsertCaseVictim(
+  caseId: string,
+  dto: UpsertCaseVictimDto,
+) {
+  const caseExists = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!caseExists) {
+    throw new NotFoundException('Case not found');
+  }
+
+  const data = {
+    name: dto.name,
+    age: dto.age,
+    occupation: dto.occupation,
+    dateOfDeath: new Date(dto.dateOfDeath),
+    placeOfDeath: dto.placeOfDeath,
+    biography: dto.biography,
+  };
+
+  return this.prisma.caseVictim.upsert({
+    where: { gameCaseId: caseId },
+    create: {
+      gameCaseId: caseId,
+      ...data,
+    },
+    update: data,
+  });
+}
+
+async deleteCaseVictim(caseId: string) {
+  const victim = await this.prisma.caseVictim.findUnique({
+    where: { gameCaseId: caseId },
+    select: { id: true },
+  });
+
+  if (!victim) {
+    throw new NotFoundException('Victim not found for this case');
+  }
+
+  await this.prisma.caseVictim.delete({
+    where: { gameCaseId: caseId },
+  });
+
+  return { message: 'Case victim deleted successfully' };
+}
+
+async getPoliceReport(caseId: string) {
+  const caseExists = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!caseExists) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.policeReport.findUnique({
+    where: { gameCaseId: caseId },
+  });
+}
+
+async upsertPoliceReport(
+  caseId: string,
+  dto: UpsertPoliceReportDto,
+) {
+  const caseExists = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!caseExists) {
+    throw new NotFoundException('Case not found');
+  }
+
+  if (
+    dto.timeOfDeathStart &&
+    dto.timeOfDeathEnd &&
+    new Date(dto.timeOfDeathEnd) < new Date(dto.timeOfDeathStart)
+  ) {
+    throw new BadRequestException(
+      'timeOfDeathEnd must be later than or equal to timeOfDeathStart',
+    );
+  }
+
+  const data = {
+    timeOfDeathStart: dto.timeOfDeathStart
+      ? new Date(dto.timeOfDeathStart)
+      : null,
+    timeOfDeathEnd: dto.timeOfDeathEnd
+      ? new Date(dto.timeOfDeathEnd)
+      : null,
+    causeOfDeath: dto.causeOfDeath,
+    officerNotes: dto.officerNotes,
+    ...(dto.isPublished !== undefined && {
+      isPublished: dto.isPublished,
+    }),
+  };
+
+  return this.prisma.policeReport.upsert({
+    where: { gameCaseId: caseId },
+    create: {
+      gameCaseId: caseId,
+      ...data,
+    },
+    update: data,
+  });
+}
+
+async deletePoliceReport(caseId: string) {
+  const report = await this.prisma.policeReport.findUnique({
+    where: { gameCaseId: caseId },
+    select: { id: true },
+  });
+
+  if (!report) {
+    throw new NotFoundException(
+      'Police report not found for this case',
+    );
+  }
+
+  await this.prisma.policeReport.delete({
+    where: { gameCaseId: caseId },
+  });
+
+  return { message: 'Police report deleted successfully' };
+}
+
+async updateInterviewThread(
+  threadId: string,
+  dto: UpdateInterviewThreadDto,
+) {
+  const thread = await this.prisma.interviewThread.findUnique({
+    where: { id: threadId },
+  });
+
+  if (!thread) {
+    throw new NotFoundException('Interview thread not found');
+  }
+
+  return this.prisma.interviewThread.update({
+    where: { id: threadId },
+    data: dto,
+  });
+}
+
+async deleteInterviewThread(threadId: string) {
+  const thread = await this.prisma.interviewThread.findUnique({
+    where: { id: threadId },
+    include: {
+      answers: { take: 1 },
+      responses: { take: 1 },
+    },
+  });
+
+  if (!thread) {
+    throw new NotFoundException('Interview thread not found');
+  }
+
+  if (thread.answers.length > 0 || thread.responses.length > 0) {
+    throw new ConflictException(
+      'Delete or resolve dependent interview data before deleting this thread',
+    );
+  }
+
+  await this.prisma.interviewThread.delete({
+    where: { id: threadId },
+  });
+
+  return { message: 'Interview thread deleted successfully' };
+}
+
+async updateInterviewResponse(
+  responseId: string,
+  dto: UpdateInterviewResponseDto,
+) {
+  const response = await this.prisma.interviewResponse.findUnique({
+    where: { id: responseId },
+  });
+
+  if (!response) {
+    throw new NotFoundException('Interview response not found');
+  }
+
+  return this.prisma.interviewResponse.update({
+    where: { id: responseId },
+    data: dto,
+  });
+}
+
+async deleteInterviewResponse(responseId: string) {
+  const response = await this.prisma.interviewResponse.findUnique({
+    where: { id: responseId },
+    include: {
+      answers: { take: 1 },
+      discoveries: { take: 1 },
+      unlocks: { take: 1 },
+    },
+  });
+
+  if (!response) {
+    throw new NotFoundException('Interview response not found');
+  }
+
+  if (
+    response.answers.length > 0 ||
+    response.discoveries.length > 0 ||
+    response.unlocks.length > 0
+  ) {
+    throw new ConflictException(
+      'This response is referenced by gameplay data and cannot be deleted safely',
+    );
+  }
+
+  await this.prisma.interviewResponse.delete({
+    where: { id: responseId },
+  });
+
+  return { message: 'Interview response deleted successfully' };
+}
 
 
 
+async getInterviewResponseUnlocks(responseId: string) {
+  const response = await this.prisma.interviewResponse.findUnique({
+    where: { id: responseId },
+    include: {
+      thread: {
+        include: {
+          suspect: {
+            select: { gameCaseId: true },
+          },
+        },
+      },
+      unlocks: {
+        include: {
+          clue: true,
+          document: true,
+          location: true,
+          suspect: true,
+        },
+      },
+    },
+  });
 
+  if (!response) {
+    throw new NotFoundException('Interview response not found');
+  }
 
+  return response.unlocks;
+}
 
+async updateInterviewResponseUnlock(
+  unlockId: string,
+  dto: UpdateInterviewResponseUnlockDto,
+) {
+  const unlock = await this.prisma.interviewResponseUnlock.findUnique({
+    where: { id: unlockId },
+    include: {
+      response: {
+        include: {
+          thread: {
+            include: {
+              suspect: {
+                select: { gameCaseId: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
 
+  if (!unlock) {
+    throw new NotFoundException('Interview response unlock not found');
+  }
 
+  const fields = ['clueId', 'documentId', 'locationId', 'suspectId'] as const;
+  const targetFields = fields.filter((field) =>
+    Object.prototype.hasOwnProperty.call(dto, field),
+  );
+
+  if (targetFields.length !== 1) {
+    throw new BadRequestException(
+      'Provide exactly one target field: clueId, documentId, locationId, or suspectId',
+    );
+  }
+
+  const targetField = targetFields[0];
+  const targetId = dto[targetField];
+
+  if (!targetId) {
+    throw new BadRequestException(
+      'A target ID is required. Create a different unlock rule to change the target type.',
+    );
+  }
+
+  const gameCaseId =
+    unlock.response.thread.suspect.gameCaseId;
+
+  let targetExists = false;
+
+  switch (targetField) {
+    case 'clueId': {
+      const target = await this.prisma.caseClue.findUnique({
+        where: { id: targetId },
+        select: { location: { select: { gameCaseId: true } } },
+      });
+      targetExists = target?.location.gameCaseId === gameCaseId;
+      break;
+    }
+
+    case 'documentId': {
+      const target = await this.prisma.caseDocument.findUnique({
+        where: { id: targetId },
+        select: { location: { select: { gameCaseId: true } } },
+      });
+      targetExists = target?.location.gameCaseId === gameCaseId;
+      break;
+    }
+
+    case 'locationId': {
+      const target = await this.prisma.caseLocation.findFirst({
+        where: { id: targetId, gameCaseId },
+        select: { id: true },
+      });
+      targetExists = !!target;
+      break;
+    }
+
+    case 'suspectId': {
+      const target = await this.prisma.caseSuspect.findFirst({
+        where: { id: targetId, gameCaseId },
+        select: { id: true },
+      });
+      targetExists = !!target;
+      break;
+    }
+  }
+
+  if (!targetExists) {
+    throw new BadRequestException(
+      'The target does not exist or does not belong to this case',
+    );
+  }
+
+  return this.prisma.interviewResponseUnlock.update({
+    where: { id: unlockId },
+    data: {
+      clueId: targetField === 'clueId' ? targetId : null,
+      documentId: targetField === 'documentId' ? targetId : null,
+      locationId: targetField === 'locationId' ? targetId : null,
+      suspectId: targetField === 'suspectId' ? targetId : null,
+    },
+  });
+}
+
+async deleteInterviewResponseUnlock(unlockId: string) {
+  const unlock = await this.prisma.interviewResponseUnlock.findUnique({
+    where: { id: unlockId },
+    select: { id: true },
+  });
+
+  if (!unlock) {
+    throw new NotFoundException('Interview response unlock not found');
+  }
+
+  await this.prisma.interviewResponseUnlock.delete({
+    where: { id: unlockId },
+  });
+
+  return { message: 'Interview response unlock deleted successfully' };
+}
 
 
 

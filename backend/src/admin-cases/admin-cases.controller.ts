@@ -53,7 +53,11 @@ import { CreateClueDto } from './dto/create-clue.dto.js';
 import { UpdateClueDto } from './dto/update-clue.dto.js';
 import { CreateDocumentDto } from './dto/create-document.dto.js';
 import { UpdateDocumentDto } from './dto/update-document.dto.js';
-
+import { UpsertCaseVictimDto } from './dto/upsert-case-victim.dto.js';
+import { UpsertPoliceReportDto } from './dto/upsert-police-report.dto.js';
+import { UpdateInterviewThreadDto } from './dto/update-interview-thread.dto.js';
+import { UpdateInterviewResponseDto } from './dto/update-interview-response.dto.js';
+import { UpdateInterviewResponseUnlockDto } from './dto/update-interview-response-unlock.dto.js';
 @ApiTags('Admin Cases')
 @ApiBearerAuth()
 @Controller('admin/cases')
@@ -516,6 +520,219 @@ deleteDocument(
     documentId,
   );
 }
+
+
+  @Get(':caseId/victim')
+  @ApiOperation({
+    summary: 'Get case victim',
+    description: 'Retrieve the victim details associated with a case.',
+  })
+  @ApiResponse({ status: 200, description: 'Victim retrieved successfully or null if not configured.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Case not found.' })
+  getCaseVictim(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+  ) {
+    return this.adminCasesService.getCaseVictim(caseId);
+  }
+
+  @Put(':caseId/victim')
+  @ApiOperation({
+    summary: 'Create or update case victim',
+    description: 'Creates the victim record if absent; otherwise updates it.',
+  })
+  @ApiResponse({ status: 200, description: 'Victim created or updated successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid victim data or case ID.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Case not found.' })
+  upsertCaseVictim(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: UpsertCaseVictimDto,
+  ) {
+    return this.adminCasesService.upsertCaseVictim(caseId, dto);
+  }
+
+  @Delete(':caseId/victim')
+  @ApiOperation({
+    summary: 'Delete case victim',
+    description: 'Deletes the victim record associated with a case.',
+  })
+  @ApiResponse({ status: 200, description: 'Victim deleted successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Victim record not found.' })
+  deleteCaseVictim(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+  ) {
+    return this.adminCasesService.deleteCaseVictim(caseId);
+  }
+
+  @Get(':caseId/police-report')
+  @ApiOperation({
+    summary: 'Get police report',
+    description: 'Retrieve the police report associated with a case.',
+  })
+  @ApiResponse({ status: 200, description: 'Police report retrieved successfully or null if not configured.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Case not found.' })
+  getPoliceReport(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+  ) {
+    return this.adminCasesService.getPoliceReport(caseId);
+  }
+
+  @Put(':caseId/police-report')
+  @ApiOperation({
+    summary: 'Create or update police report',
+    description: 'Creates the police report if absent; otherwise updates it.',
+  })
+  @ApiResponse({ status: 200, description: 'Police report created or updated successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid report data or time-of-death interval.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Case not found.' })
+  upsertPoliceReport(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: UpsertPoliceReportDto,
+  ) {
+    return this.adminCasesService.upsertPoliceReport(caseId, dto);
+  }
+
+  @Delete(':caseId/police-report')
+  @ApiOperation({
+    summary: 'Delete police report',
+    description: 'Deletes the police report associated with a case.',
+  })
+  @ApiResponse({ status: 200, description: 'Police report deleted successfully.' })
+  @ApiResponse({ status: 401, description: 'Unauthorized: missing or invalid JWT.' })
+  @ApiResponse({ status: 403, description: 'Forbidden: ADMIN role required.' })
+  @ApiResponse({ status: 404, description: 'Police report not found.' })
+  deletePoliceReport(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+  ) {
+    return this.adminCasesService.deletePoliceReport(caseId);
+  }
+
+  
+@Get(':caseId/validate')
+@ApiOperation({
+  summary: 'Validate case content before publishing',
+})
+@ApiResponse({
+  status: 200,
+  description: 'Returns validation errors and warnings.',
+})
+@ApiResponse({ status: 401, description: 'Unauthorized.' })
+@ApiResponse({ status: 403, description: 'Admin access required.' })
+@ApiResponse({ status: 404, description: 'Case not found.' })
+validateCaseForPublishing(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.validateCaseForPublishing(caseId);
+}
+
+@Patch('interview-threads/:threadId')
+@ApiOperation({ summary: 'Update an interview thread' })
+@ApiResponse({ status: 200, description: 'Interview thread updated' })
+@ApiResponse({ status: 404, description: 'Interview thread not found' })
+updateInterviewThread(
+  @Param('threadId', ParseUUIDPipe) threadId: string,
+  @Body() dto: UpdateInterviewThreadDto,
+) {
+  return this.adminCasesService.updateInterviewThread(threadId, dto);
+}
+
+@Delete('interview-threads/:threadId')
+@ApiOperation({ summary: 'Delete an interview thread' })
+@ApiResponse({ status: 200, description: 'Interview thread deleted' })
+@ApiResponse({ status: 409, description: 'Thread has dependent data' })
+deleteInterviewThread(
+  @Param('threadId', ParseUUIDPipe) threadId: string,
+) {
+  return this.adminCasesService.deleteInterviewThread(threadId);
+}
+
+@Patch('interview-responses/:responseId')
+@ApiOperation({ summary: 'Update an interview response' })
+@ApiResponse({ status: 200, description: 'Interview response updated' })
+@ApiResponse({ status: 404, description: 'Interview response not found' })
+updateInterviewResponse(
+  @Param('responseId', ParseUUIDPipe) responseId: string,
+  @Body() dto: UpdateInterviewResponseDto,
+) {
+  return this.adminCasesService.updateInterviewResponse(responseId, dto);
+}
+
+@Delete('interview-responses/:responseId')
+@ApiOperation({ summary: 'Delete an interview response' })
+@ApiResponse({ status: 200, description: 'Interview response deleted' })
+@ApiResponse({ status: 409, description: 'Response has dependent data' })
+deleteInterviewResponse(
+  @Param('responseId', ParseUUIDPipe) responseId: string,
+) {
+  return this.adminCasesService.deleteInterviewResponse(responseId);
+}
+
+
+@Get('interview-responses/:responseId/unlocks')
+@ApiOperation({ summary: 'Get unlock rules for an interview response' })
+@ApiResponse({ status: 200, description: 'Unlock rules retrieved' })
+@ApiResponse({ status: 404, description: 'Interview response not found' })
+getInterviewResponseUnlocks(
+  @Param('responseId', ParseUUIDPipe) responseId: string,
+) {
+  return this.adminCasesService.getInterviewResponseUnlocks(responseId);
+}
+
+@Patch('interview-response-unlocks/:unlockId')
+@ApiOperation({ summary: 'Update an interview response unlock rule' })
+@ApiResponse({ status: 200, description: 'Unlock rule updated' })
+@ApiResponse({ status: 400, description: 'Invalid target or case mismatch' })
+@ApiResponse({ status: 404, description: 'Unlock rule not found' })
+updateInterviewResponseUnlock(
+  @Param('unlockId', ParseUUIDPipe) unlockId: string,
+  @Body() dto: UpdateInterviewResponseUnlockDto,
+) {
+  return this.adminCasesService.updateInterviewResponseUnlock(unlockId, dto);
+}
+
+@Delete('interview-response-unlocks/:unlockId')
+@ApiOperation({ summary: 'Delete an interview response unlock rule' })
+@ApiResponse({ status: 200, description: 'Unlock rule deleted' })
+@ApiResponse({ status: 404, description: 'Unlock rule not found' })
+deleteInterviewResponseUnlock(
+  @Param('unlockId', ParseUUIDPipe) unlockId: string,
+) {
+  return this.adminCasesService.deleteInterviewResponseUnlock(unlockId);
+}
+
+
+
+
+@Get(':caseId/preview')
+@ApiOperation({ summary: 'Preview complete case authoring content' })
+@ApiResponse({
+  status: 200,
+  description: 'Complete case content retrieved',
+})
+@ApiResponse({
+  status: 404,
+  description: 'Case not found',
+})
+getCasePreview(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getCasePreview(caseId);
+}
+
+
+
+
+
+
 
 
 

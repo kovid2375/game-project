@@ -111,7 +111,7 @@ model GameCase {
   suspects      CaseSuspect[]
   locations     CaseLocation[]
   hints         CaseHint[]
-  solution      CaseSolution[]
+  solution      CaseSolution?
   playerCases   PlayerCase[]
 
   @@index([isPublished, caseNumber])
