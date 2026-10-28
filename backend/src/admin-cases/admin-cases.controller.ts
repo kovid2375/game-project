@@ -35,6 +35,7 @@ import { CloudinaryService } from './cloudinary.service.js';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Body } from '@nestjs/common';
 import { CreateCaseDto } from './dto/create-case.dto.js';
+import { CreateCaseBundleDto } from './dto/create-case-bundle.dto.js';
 import { AdminCasesService } from './admin-cases.service.js';
 import { UpdateCaseDto } from './dto/update-case.dto.js';
 import { FindCasesQueryDto } from './dto/find-cases-query.dto.js';
@@ -117,6 +118,13 @@ export class AdminCasesController {
     file: Express.Multer.File,
   ) {
     return this.cloudinaryService.uploadCaseCover(file);
+  }
+
+  @Post('bundle')
+  @ApiOperation({ summary: 'Create a full case with all nested entities atomically' })
+  @ApiResponse({ status: 201, description: 'Case bundle created successfully' })
+  async createBundle(@Body() dto: CreateCaseBundleDto) {
+    return this.adminCasesService.createBundle(dto);
   }
 
   @Post()
@@ -377,6 +385,13 @@ deleteCaseHint(
 }
 
 
+
+@Get(':caseId/solution')
+getCaseSolution(
+  @Param('caseId', ParseUUIDPipe) caseId: string,
+) {
+  return this.adminCasesService.getCaseSolution(caseId);
+}
 
 @Put(':caseId/solution')
 upsertCaseSolution(

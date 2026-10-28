@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Edit2,
   Trash2,
+  Eye,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -319,6 +320,13 @@ export default function UsersTable({
                     {/* Actions */}
                     <td className="px-6 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                        <a
+                          href={`/admin/users/${u.id}`}
+                          title="View user details"
+                          className="p-1.5 rounded-lg border border-neutral-200 bg-white hover:bg-neutral-50 hover:border-neutral-300 text-neutral-600 hover:text-neutral-900 transition-all cursor-pointer shadow-2xs inline-flex items-center justify-center"
+                        >
+                          <Eye size={14} />
+                        </a>
                         <button
                           onClick={() => openEditDrawer(u)}
                           title="Edit player details"

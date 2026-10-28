@@ -95,15 +95,27 @@ export default function CoverUpload({
             referrerPolicy="no-referrer"
             className="w-full h-full object-cover group-hover:opacity-85 transition-opacity"
           />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 bg-white text-neutral-900 text-xs font-semibold rounded-lg shadow-md hover:bg-neutral-100 cursor-pointer"
-            >
-              Change Image
-            </button>
-          </div>
+
+          {isUploading && (
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2.5 z-20 transition-all">
+              <Loader2 size={32} className="animate-spin text-red-500" />
+              <p className="text-xs font-semibold text-white tracking-wide">
+                Uploading new cover…
+              </p>
+            </div>
+          )}
+
+          {!isUploading && (
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition-opacity">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 bg-white text-neutral-900 text-xs font-semibold rounded-lg shadow-md hover:bg-neutral-100 cursor-pointer"
+              >
+                Change Image
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div

@@ -5,6 +5,7 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  Matches
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -23,6 +24,9 @@ export class SubmitAccusationDto {
   @IsString()
   @MinLength(1)
   @MaxLength(500)
+  @Matches(/\S/, {
+  message: 'Motive cannot contain only whitespace',
+})
   motive: string;
 
   @ApiProperty({
@@ -32,6 +36,9 @@ export class SubmitAccusationDto {
   @IsString()
   @MinLength(1)
   @MaxLength(500)
+    @Matches(/\S/, {
+  message: 'Motive cannot contain only whitespace',
+})
   method: string;
   
   @ApiProperty({
@@ -41,5 +48,8 @@ export class SubmitAccusationDto {
   @IsString()
   @MinLength(1)
   @MaxLength(5000)
+  @Matches(/\S/, {
+  message: 'Motive cannot contain only whitespace',
+})
   explanation: string;
 }

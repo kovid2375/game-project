@@ -602,7 +602,7 @@ async adminLogin(loginDto: LoginDto) {
     accessToken,
     refreshToken,
     tokenType: 'Bearer',
-    expiresIn: 600,
+    expiresIn: 43200,
     user: {
       id: user.id,
       name: user.name,

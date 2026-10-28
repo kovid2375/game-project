@@ -15,6 +15,7 @@ import { UpdateSuspectDto } from './dto/update-suspect.dto.js';
 import { CreateInterviewThreadDto } from './dto/create-interview-thread.dto.js';
 import { CreateInterviewResponseDto } from './dto/create-interview-response.dto.js';
 import { CreateInterviewResponseUnlockDto } from './dto/create-interview-response-unlock.dto.js';
+import { UpdateInterviewResponseUnlockDto } from './dto/update-interview-response-unlock.dto.js';
 import { CreateCaseLeadDto } from './dto/create-case-lead.dto.js';
 import { CreateCaseHintDto } from './dto/create-case-hint.dto.js';
 import { UpdateCaseHintDto } from './dto/update-case-hint.dto.js';
@@ -29,13 +30,242 @@ import { UpsertCaseVictimDto } from './dto/upsert-case-victim.dto.js';
 import { UpsertPoliceReportDto } from './dto/upsert-police-report.dto.js';
 import { UpdateInterviewThreadDto } from './dto/update-interview-thread.dto.js';
 import { UpdateInterviewResponseDto } from './dto/update-interview-response.dto.js';
-import { UpdateInterviewResponseUnlockDto } from './dto/update-interview-response-unlock.dto.js';
+import { CreateCaseBundleDto } from './dto/create-case-bundle.dto.js';
 @Injectable()
 export class AdminCasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async createBundle(dto: CreateCaseBundleDto) {
+    let suppliedUrl: URL;
+    try {
+      suppliedUrl = new URL(dto.coverImageUrl);
+    } catch {
+      throw new BadRequestException('Invalid cover image URL');
+    }
+
+    const endpoint = this.config.get<string>('IMAGEKIT_URL_ENDPOINT');
+    const expectedHost = endpoint ? new URL(endpoint).hostname : null;
+    const isCloudinary = suppliedUrl.hostname.includes('cloudinary.com');
+    const isExpectedHost =
+      expectedHost && suppliedUrl.hostname === expectedHost;
+
+    if (
+      suppliedUrl.protocol !== 'https:' ||
+      (!isCloudinary && !isExpectedHost)
+    ) {
+      throw new ConflictException(
+        'Cover image must be hosted on Cloudinary or your configured media endpoint',
+      );
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Create main GameCase
+        const newCase = await tx.gameCase.create({
+          data: {
+            caseNumber: dto.caseNumber,
+            title: dto.title.trim(),
+            description: dto.description.trim(),
+            coverImageUrl: dto.coverImageUrl.trim(),
+            priceInPaise: (dto.priceInRupees || 0) * 100,
+            isPublished: dto.isPublished ?? false,
+          },
+        });
+
+        // 2. Create Victim if provided
+        if (dto.victim) {
+          await tx.caseVictim.create({
+            data: {
+              gameCaseId: newCase.id,
+              name: dto.victim.name.trim(),
+              age: dto.victim.age,
+              occupation: dto.victim.occupation.trim(),
+              dateOfDeath: new Date(dto.victim.dateOfDeath),
+              placeOfDeath: dto.victim.placeOfDeath.trim(),
+              biography: dto.victim.biography?.trim() || null,
+            },
+          });
+        }
+
+        // 3. Create Police Report if provided
+        if (dto.policeReport) {
+          await tx.policeReport.create({
+            data: {
+              gameCaseId: newCase.id,
+              causeOfDeath: dto.policeReport.causeOfDeath.trim(),
+              officerNotes: dto.policeReport.officerNotes.trim(),
+              timeOfDeathStart: dto.policeReport.timeOfDeathStart
+                ? new Date(dto.policeReport.timeOfDeathStart)
+                : null,
+              timeOfDeathEnd: dto.policeReport.timeOfDeathEnd
+                ? new Date(dto.policeReport.timeOfDeathEnd)
+                : null,
+              isPublished: dto.policeReport.isPublished ?? true,
+            },
+          });
+        }
+
+        // 4. Create Locations with Clues and Documents
+        if (dto.locations && dto.locations.length > 0) {
+          for (let lIdx = 0; lIdx < dto.locations.length; lIdx++) {
+            const loc = dto.locations[lIdx];
+            const createdLoc = await tx.caseLocation.create({
+              data: {
+                gameCaseId: newCase.id,
+                name: loc.name.trim(),
+                description: loc.description.trim(),
+                imageUrl: loc.imageUrl?.trim() || null,
+                mapX: loc.mapX ?? 50,
+                mapY: loc.mapY ?? 50,
+                isInitiallyOpen: loc.isInitiallyOpen ?? true,
+                isDeadEnd: loc.isDeadEnd ?? false,
+                sortOrder: lIdx,
+              },
+            });
+
+            if (loc.clues && loc.clues.length > 0) {
+              for (let cIdx = 0; cIdx < loc.clues.length; cIdx++) {
+                const clue = loc.clues[cIdx];
+                await tx.caseClue.create({
+                  data: {
+                    locationId: createdLoc.id,
+                    title: clue.title.trim(),
+                    description: clue.description.trim(),
+                    imageUrl: clue.imageUrl?.trim() || null,
+                    sortOrder: cIdx,
+                  },
+                });
+              }
+            }
+
+            if (loc.documents && loc.documents.length > 0) {
+              for (let dIdx = 0; dIdx < loc.documents.length; dIdx++) {
+                const doc = loc.documents[dIdx];
+                await tx.caseDocument.create({
+                  data: {
+                    locationId: createdLoc.id,
+                    title: doc.title.trim(),
+                    description: doc.description.trim(),
+                    content: doc.content?.trim() || null,
+                    sortOrder: dIdx,
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        // 5. Create Suspects and Interview Threads
+        const createdSuspects: { id: string; name: string }[] = [];
+        if (dto.suspects && dto.suspects.length > 0) {
+          for (let sIdx = 0; sIdx < dto.suspects.length; sIdx++) {
+            const s = dto.suspects[sIdx];
+            const createdSuspect = await tx.caseSuspect.create({
+              data: {
+                gameCaseId: newCase.id,
+                name: s.name.trim(),
+                relationship: s.relationship.trim(),
+                description: s.description.trim(),
+                claimedAlibi: s.claimedAlibi.trim(),
+                photoUrl: s.photoUrl?.trim() || null,
+                connections: s.connections?.trim() || '',
+                isInitiallyUnlocked: s.isInitiallyUnlocked ?? true,
+                sortOrder: sIdx,
+              },
+            });
+            createdSuspects.push({ id: createdSuspect.id, name: createdSuspect.name });
+
+            if (s.threads && s.threads.length > 0) {
+              for (let tIdx = 0; tIdx < s.threads.length; tIdx++) {
+                const thread = s.threads[tIdx];
+                const createdThread = await tx.interviewThread.create({
+                  data: {
+                    suspectId: createdSuspect.id,
+                    topic: thread.topic.trim(),
+                    question: thread.question.trim(),
+                    visitNumber: thread.visitNumber ?? 1,
+                    isInitiallyAvailable: thread.isInitiallyAvailable ?? true,
+                    sortOrder: tIdx,
+                  },
+                });
+
+                if (thread.responses && thread.responses.length > 0) {
+                  for (let rIdx = 0; rIdx < thread.responses.length; rIdx++) {
+                    const resp = thread.responses[rIdx];
+                    await tx.interviewResponse.create({
+                      data: {
+                        threadId: createdThread.id,
+                        responseText: resp.responseText.trim(),
+                        isNervous: resp.isNervous ?? false,
+                        internalNotes: resp.internalNotes?.trim() || null,
+                        sortOrder: rIdx,
+                      },
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // 6. Create Case Solution
+        if (dto.solution) {
+          let targetSuspectId = dto.solution.correctSuspectId;
+          if (
+            !targetSuspectId &&
+            dto.solution.correctSuspectIndex !== undefined &&
+            createdSuspects[dto.solution.correctSuspectIndex]
+          ) {
+            targetSuspectId = createdSuspects[dto.solution.correctSuspectIndex].id;
+          } else if (!targetSuspectId && createdSuspects.length > 0) {
+            targetSuspectId = createdSuspects[0].id;
+          }
+
+          if (targetSuspectId) {
+            await tx.caseSolution.create({
+              data: {
+                gameCaseId: newCase.id,
+                correctSuspectId: targetSuspectId,
+                motive: dto.solution.motive.trim(),
+                method: dto.solution.method.trim(),
+                explanation: dto.solution.explanation.trim(),
+                epilogue: dto.solution.epilogue.trim(),
+                motiveKeywords: dto.solution.motiveKeywords ?? [],
+                methodKeywords: dto.solution.methodKeywords ?? [],
+              },
+            });
+          }
+        }
+
+        return {
+          id: newCase.id,
+          caseNumber: newCase.caseNumber,
+          title: newCase.title,
+          description: newCase.description,
+          coverImageUrl: newCase.coverImageUrl,
+          priceInPaise: newCase.priceInPaise,
+          priceInRupees: newCase.priceInPaise / 100,
+          isPublished: newCase.isPublished,
+          createdAt: newCase.createdAt,
+        };
+      });
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'A case with this case number already exists.',
+        );
+      }
+      throw error;
+    }
+  }
   async create(dto: CreateCaseDto) {
     let suppliedUrl: URL;
     try {
@@ -70,6 +300,7 @@ export class AdminCasesService {
         },
         select: {
           id: true,
+          caseNumber: true,
           title: true,
           description: true,
           coverImageUrl: true,
@@ -442,10 +673,9 @@ async setPublished(id: string, isPublished: boolean) {
     }
   }
   async findOne(id: string) {
-    const item = await this.prisma.gameCase.findFirst({
+    const item = await this.prisma.gameCase.findUnique({
       where: {
         id,
-        isPublished: true,
       },
       select: {
         id: true,
@@ -454,6 +684,9 @@ async setPublished(id: string, isPublished: boolean) {
         description: true,
         coverImageUrl: true,
         priceInPaise: true,
+        isPublished: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -1263,6 +1496,21 @@ async deleteCaseHint(caseId: string, hintId: string) {
   return { message: 'Hint deleted successfully' };
 }
 
+
+async getCaseSolution(caseId: string) {
+  const gameCase = await this.prisma.gameCase.findUnique({
+    where: { id: caseId },
+    select: { id: true },
+  });
+
+  if (!gameCase) {
+    throw new NotFoundException('Case not found');
+  }
+
+  return this.prisma.caseSolution.findUnique({
+    where: { gameCaseId: caseId },
+  });
+}
 
 async upsertCaseSolution(
   caseId: string,

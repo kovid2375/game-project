@@ -61,6 +61,14 @@ export class AdminUsersController {
     );
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get detailed information for a single player' })
+  @ApiResponse({ status: 200, description: 'Player details' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminUsersService.findOne(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Update a player account' })
   update(

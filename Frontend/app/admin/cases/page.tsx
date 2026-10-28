@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import CaseFilters from "@/components/admin/cases/CaseFilters";
 import CasesTable from "@/components/admin/cases/CasesTable";
 import CaseModal from "@/components/admin/cases/CaseModal";
@@ -9,6 +10,7 @@ import { useAdminCases } from "@/lib/hooks/useAdminCases";
 import { AdminCase, CreateCasePayload, UpdateCasePayload } from "@/lib/api/cases.api";
 
 export default function AdminCasesPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [publishStatus, setPublishStatus] = useState<"all" | "published" | "draft">("all");
@@ -52,13 +54,15 @@ export default function AdminCasesPage() {
   });
 
   const handleOpenCreateModal = () => {
-    setSelectedCase(null);
-    setIsModalOpen(true);
+    router.push("/admin/cases/create");
   };
 
   const handleOpenEditModal = (item: AdminCase) => {
-    setSelectedCase(item);
-    setIsModalOpen(true);
+    router.push(`/admin/cases/create?caseId=${item.id}&step=1`);
+  };
+
+  const handleViewCase = (item: AdminCase) => {
+    router.push(`/admin/cases/${item.id}`);
   };
 
   const handleSaveCase = async (data: CreateCasePayload | UpdateCasePayload) => {
@@ -115,6 +119,7 @@ export default function AdminCasesPage() {
         error={error}
         page={page}
         onPageChange={setPage}
+        onViewCase={handleViewCase}
         onEditCase={handleOpenEditModal}
         onDeleteCase={handleOpenDelete}
         onTogglePublish={togglePublish}

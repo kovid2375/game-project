@@ -1716,24 +1716,26 @@ async submitAccusation(
   playerCaseId: string,
   dto: SubmitAccusationDto,
 ) {
-  const normalize = (value: string) =>
-    value.trim().toLowerCase().replace(/\s+/g, ' ');
+ const matchesAnswer = (
+  submitted: string,
+  canonical: string,
+  keywords: string[],
+) => {
+  const normalize = (value?: string) =>
+    value?.trim().toLowerCase().replace(/[^\w\s]/g, '') || '';
 
-  const matchesAnswer = (
-    submitted: string,
-    canonical: string,
-    keywords: string[],
-  ) => {
-    const answer = normalize(submitted);
-    const accepted = [canonical, ...keywords].map(normalize);
+  const answer = normalize(submitted);
 
-    return accepted.some(
-      (candidate) =>
-        answer === candidate ||
-        answer.includes(candidate) ||
-        candidate.includes(answer),
-    );
-  };
+  if (!answer) {
+    return false;
+  }
+
+  const accepted = [canonical, ...keywords]
+    .map(normalize)
+    .filter(Boolean);
+
+  return accepted.some((candidate) => answer === candidate);
+};
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {

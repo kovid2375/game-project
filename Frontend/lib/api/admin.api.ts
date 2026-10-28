@@ -13,6 +13,38 @@ export interface AdminUser {
   updatedAt: string;
 }
 
+export interface AdminUserDetail extends AdminUser {
+  lastLogin?: string | null;
+  sessions?: {
+    id: string;
+    createdAt: string;
+    lastUsedAt?: string | null;
+    expiresAt: string;
+  }[];
+  playerCases?: {
+    id: string;
+    gameCaseId: string;
+    status: string;
+    currentPhase: number;
+    actionPoints: number;
+    score: number;
+    hintsUsed: number;
+    attemptsUsed: number;
+    startedAt: string;
+    completedAt?: string | null;
+    lastActivityAt: string;
+    gameCase?: {
+      id: string;
+      caseNumber: number;
+      title: string;
+      priceInPaise: number;
+      coverImageUrl: string;
+    };
+    discoveries?: any[];
+    attempts?: any[];
+  }[];
+}
+
 export interface AdminPagination {
   page: number;
   limit: number;
@@ -93,6 +125,11 @@ export const adminApi = {
     return apiClient<AdminUsersResponse>(
       `/admin/users${qs ? `?${qs}` : ""}`,
     );
+  },
+
+  /** GET /admin/users/:id */
+  getUser(id: string): Promise<AdminUserDetail> {
+    return apiClient<AdminUserDetail>(`/admin/users/${id}`);
   },
 
   /** PATCH /admin/users/:id */

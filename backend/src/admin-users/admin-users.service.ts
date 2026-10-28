@@ -77,6 +77,63 @@ export class AdminUsersService {
     };
   }
 
+  async findOne(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        sessions: {
+          orderBy: { lastUsedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            createdAt: true,
+            lastUsedAt: true,
+            expiresAt: true,
+          },
+        },
+        playerCases: {
+          orderBy: { lastActivityAt: 'desc' },
+          include: {
+            gameCase: {
+              select: {
+                id: true,
+                caseNumber: true,
+                title: true,
+                priceInPaise: true,
+                coverImageUrl: true,
+              },
+            },
+            discoveries: {
+              include: {
+                clue: true,
+              },
+            },
+            attempts: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const lastLogin = user.sessions[0]?.lastUsedAt || user.sessions[0]?.createdAt || null;
+
+    return {
+      ...user,
+      lastLogin,
+    };
+  }
+
   async update(id: string, dto: UpdateUserDto) {
     const data = {
       ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),

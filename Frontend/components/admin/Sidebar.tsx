@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Users,
   Briefcase,
+  Trophy,
   Settings,
   Search,
   ShieldAlert,
@@ -15,6 +16,7 @@ const navItems = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Cases", href: "/admin/cases", icon: Briefcase },
+  { label: "Leaderboards", href: "/admin/leaderboards", icon: Trophy },
 ];
 
 export default function Sidebar() {

@@ -92,8 +92,12 @@ export async function apiClient<T>(endpoint: string, options: RequestOptions = {
         errorMessage = responseData;
       }
 
-      if (response.status === 409) {
-        errorMessage = errorMessage || 'An account with this email already exists';
+      if (response.status === 401 && typeof window !== 'undefined') {
+        if (window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin/login') {
+          setAccessToken(null);
+          localStorage.removeItem('casefile_admin_user');
+          window.location.href = '/admin/login?expired=1';
+        }
       }
 
       throw new ApiError(errorMessage, response.status, details || responseData);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Edit3,
   Trash2,
+  Eye,
   ExternalLink,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   IndianRupee,
 } from "lucide-react";
 import { AdminCase, AdminCasesPagination } from "@/lib/api/cases.api";
+import PublishCaseModal from "./PublishCaseModal";
 
 interface CasesTableProps {
   cases: AdminCase[];
@@ -22,6 +24,7 @@ interface CasesTableProps {
   error: string | null;
   page: number;
   onPageChange: (page: number) => void;
+  onViewCase?: (item: AdminCase) => void;
   onEditCase: (item: AdminCase) => void;
   onDeleteCase: (item: AdminCase) => void;
   onTogglePublish: (id: string, isPublished: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -35,17 +38,30 @@ export default function CasesTable({
   error,
   page,
   onPageChange,
+  onViewCase,
   onEditCase,
   onDeleteCase,
   onTogglePublish,
   onRetry,
 }: CasesTableProps) {
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [caseToPublish, setCaseToPublish] = useState<AdminCase | null>(null);
 
   const handleToggle = async (item: AdminCase) => {
+    // If it's currently a Draft and user wants to publish, open validation modal
+    if (!item.isPublished) {
+      setCaseToPublish(item);
+      return;
+    }
+
+    // If it's already published and user wants to unpublish/draft, unpublish directly
     setPublishingId(item.id);
-    await onTogglePublish(item.id, !item.isPublished);
+    await onTogglePublish(item.id, false);
     setPublishingId(null);
+  };
+
+  const handleConfirmPublishModal = async (id: string) => {
+    return await onTogglePublish(id, true);
   };
 
   const totalPages = pagination?.totalPages ?? 1;
@@ -227,6 +243,14 @@ export default function CasesTable({
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => onViewCase ? onViewCase(item) : (window.location.href = `/admin/cases/${item.id}`)}
+                          title="View Case Details"
+                          className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-md transition-colors cursor-pointer"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => onEditCase(item)}
                           title="Edit Case"
                           className="p-1.5 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded-md transition-colors cursor-pointer"
@@ -278,6 +302,14 @@ export default function CasesTable({
           </button>
         </div>
       </div>
+
+      {/* ── Publish Validation Confirmation Modal ── */}
+      <PublishCaseModal
+        isOpen={Boolean(caseToPublish)}
+        caseItem={caseToPublish}
+        onClose={() => setCaseToPublish(null)}
+        onConfirmPublish={handleConfirmPublishModal}
+      />
     </div>
   );
 }

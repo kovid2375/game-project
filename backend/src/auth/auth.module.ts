@@ -28,7 +28,7 @@ import { OtpService } from './otp/otp.service.js';
 
         return {
           secret,
-          signOptions: { expiresIn: '10m' },
+          signOptions: { expiresIn: '12h' },
         };
       },
     }),
